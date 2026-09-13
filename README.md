@@ -18,23 +18,52 @@ Mockup interfejsu: `design/mockup.html` (pięć ekranów, otwórz w przeglądarc
 
 ## Uruchomienie
 
+Dwuklik w `AVREE Tuner.bat`. Amplituner zostaje znaleziony sam, interfejs
+otwiera się w przeglądarce pod `http://localhost:8770/`.
+
+Z wiersza poleceń:
+
 ```bash
-python avree/discovery.py 192.168.0.0/24   # znajdź amplituner
-python tools/probe.py 192.168.0.73         # zrzut pełnego stanu
-python tools/http_probe.py 192.168.0.73    # rozpoznanie HTTP
-python tools/mapper.py 192.168.0.73        # mapowanie nieudokumentowanych komend
+python avree_tuner.py                 # sam znajdzie amplituner
+python avree_tuner.py 192.168.1.50    # albo podaj adres wprost
+python avree_tuner.py --port 8771 --no-browser
 ```
 
+Z tabletu w tej samej sieci: `http://<adres-komputera>:8770/`.
+
 Python 3.13+ (`telnetlib` zniknęło ze stdlib — klient jest na gołym sockecie).
-Rdzeń nie ma zależności zewnętrznych.
+**Bez zależności zewnętrznych** — sama biblioteka standardowa.
+
+### Jak znajduje amplituner
+
+1. Adres zapamiętany z poprzedniego uruchomienia.
+2. SSDP M-SEARCH wysłany osobno z **każdego** interfejsu sieciowego.
+3. Skan portów sterowania po każdej wykrytej podsieci /24.
+
+Nic nie jest zaszyte na sztywno — podsieci biorą się z interfejsów komputera,
+więc działa w dowolnej sieci. Potwierdzeniem jest odpowiedź na
+`/goform/Deviceinfo.xml`, a nie otwarty port telnet: amplituner przyjmuje
+tylko jedno połączenie telnet naraz, więc gdy trzyma je inna aplikacja,
+port 23 wygląda na zamknięty.
+
+Adres można też wpisać ręcznie w zakładce Konfiguracja.
+
+### Narzędzia diagnostyczne
+
+```bash
+python avree/discovery.py            # co widać w sieci
+python tools/probe.py 192.168.0.73   # zrzut pełnego stanu
+python tools/http_probe.py <ip>      # rozpoznanie warstwy HTTP
+python tools/mapper.py <ip>          # mapowanie nieudokumentowanych komend
+```
 
 ## Plan
 
 | Etap | Zakres |
 |---|---|
 | 0 | Diagnostyka: zrzut stanu + pomiar różnicowy Audyssey ON/OFF |
-| 1 | Sterownik i GUI — pełna kontrola nad AVR |
-| 2 | Odtwarzanie: foobar2000/DLNA, pętla WASAPI, monitor formatu wejściowego |
+| 1 | Sterownik i GUI — pełna kontrola nad AVR ✔ |
+| 2 | Odtwarzanie plików przez DLNA ✔ · pętla WASAPI dla przeglądarki |
 | 3 | Parser `.ady` — odczyt i wizualizacja kalibracji |
 | 4 | Pipeline pomiarowy przez API Room EQ Wizard |
 | 5 | Własny optymalizator filtrów |

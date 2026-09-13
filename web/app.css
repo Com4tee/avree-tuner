@@ -142,3 +142,75 @@ tbody tr.sub { background: #141a1a; }
   box-shadow: 0 8px 24px rgba(0,0,0,.5);
 }
 .toast.ok { background: #182220; border-color: #2d4a48; color: #8fd6d4; }
+
+/* --- dymki podpowiedzi --- */
+[data-tip] { cursor: help; }
+button[data-tip], .pill[data-tip] { cursor: pointer; }
+
+#tip {
+  position: fixed; z-index: 90; max-width: 400px;
+  background: #1b1f23; border: 1px solid #3c454d; border-radius: 4px;
+  padding: 11px 13px; font-size: 11.5px; line-height: 1.55; color: #c5cdd4;
+  box-shadow: 0 10px 30px rgba(0,0,0,.65);
+  white-space: pre-wrap; pointer-events: none;
+}
+#tip b { display: block; color: var(--amber); font-size: 11px;
+         letter-spacing: .1em; margin-bottom: 6px; font-weight: 600; }
+
+/* --- suwak głośności --- */
+.fader { position: relative; padding: 16px 0 6px; }
+.fader input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 6px; margin: 0;
+  background: linear-gradient(to right, var(--teal) 0%, var(--teal) var(--fill),
+                              #23282d var(--fill), #23282d 100%);
+  border-radius: 3px; outline: none; cursor: pointer;
+}
+.fader input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 16px; height: 26px; border-radius: 3px;
+  background: #dce2e8; border: 1px solid #6b747c; cursor: grab;
+  box-shadow: 0 2px 6px rgba(0,0,0,.6);
+}
+.fader input[type=range]:active::-webkit-slider-thumb { cursor: grabbing; background: var(--teal); }
+.fader input[type=range]::-moz-range-thumb {
+  width: 14px; height: 24px; border-radius: 3px;
+  background: #dce2e8; border: 1px solid #6b747c; cursor: grab;
+}
+.fader .ceil {
+  position: absolute; top: 10px; width: 2px; height: 18px;
+  background: var(--red); pointer-events: none;
+}
+.fader .ceil::after {
+  content: 'sufit'; position: absolute; top: -12px; left: 50%;
+  transform: translateX(-50%); font-size: 9px; color: var(--red);
+  letter-spacing: .08em; white-space: nowrap;
+}
+.fader .scale {
+  display: flex; justify-content: space-between; margin-top: 7px;
+  font-family: var(--mono); font-size: 10px; color: var(--ghost);
+}
+
+/* --- konfiguracja --- */
+.setup-row {
+  display: grid; grid-template-columns: 150px 1fr 1fr; gap: 10px;
+  align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line-dim);
+}
+.setup-row:last-child { border-bottom: 0; }
+.seg { display: flex; gap: 4px; flex-wrap: wrap; }
+.seg button {
+  padding: 6px 11px; background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 3px; font: inherit; font-size: 11.5px; color: #9aa3ab; cursor: pointer;
+}
+.seg button:hover { color: var(--text); border-color: var(--ghost); }
+.seg button.on { background: #1f2a2b; border-color: var(--teal); color: var(--teal); font-weight: 600; }
+.seg button.warn-on { background: var(--amber); border-color: var(--amber); color: #12140f; font-weight: 600; }
+
+/* --- pad menu ekranowego --- */
+.osd-pad { display: grid; grid-template-columns: repeat(3, 52px); gap: 6px; justify-content: center; }
+.osd-pad button {
+  height: 44px; background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 3px; color: #9aa3ab; font: inherit; font-size: 15px; cursor: pointer;
+}
+.osd-pad button:hover { color: var(--text); border-color: var(--ghost); }
+.osd-pad button.mid { background: #1f2a2b; border-color: var(--teal); color: var(--teal); font-size: 11px; font-weight: 600; }

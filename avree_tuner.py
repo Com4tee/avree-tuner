@@ -36,17 +36,28 @@ BANNER = r"""
 
 
 def find_receiver() -> str | None:
-    print("Szukam amplitunera w sieci lokalnej...")
-    found = discovery.discover("192.168.0.0/24")
-    named = [d for d in found if d.model]
-    if named:
-        for d in named:
-            print(f"  znaleziono: {d}")
-        return named[0].host
-    if found:
-        print(f"  najlepszy kandydat: {found[0]}")
-        return found[0].host
-    return None
+    """Zapamiętany adres, potem SSDP, na końcu skan wykrytych podsieci."""
+    print("Szukam amplitunera...")
+    print("  interfejsy:", ", ".join(discovery.local_ips()) or "brak")
+
+    announced: set[str] = set()
+
+    def progress(done: int, total: int, net: str | None = None) -> None:
+        if net and net not in announced:
+            announced.add(net)
+            print(f"  skanuję {net} ...")
+
+    found = discovery.discover(progress=progress)
+    confirmed = [d for d in found if d.is_receiver]
+
+    for d in confirmed or found:
+        mark = "znaleziono" if d.is_receiver else "kandydat  "
+        print(f"  {mark}: {d}   ({d.source})")
+
+    if confirmed:
+        discovery.save_host(confirmed[0].host)
+        return confirmed[0].host
+    return found[0].host if found else None
 
 
 def main() -> int:

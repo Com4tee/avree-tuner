@@ -16,8 +16,16 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from . import upnp
-from .avr import SURROUND_MODES, Avr
+from . import discovery, upnp
+from .avr import (
+    CROSSOVER_FREQS,
+    MODE_CATEGORIES,
+    SPEAKER_POSITIONS,
+    SPEAKER_SIZES,
+    SURROUND_MODES,
+    TIPS,
+    Avr,
+)
 from .telnet import DenonTelnetError
 
 WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
@@ -54,6 +62,9 @@ class App:
         self.renderer_error: str | None = None
         self.now_playing: dict[str, Any] | None = None
         self.port = 0
+        # Wynik ostatniego szukania w sieci - interfejs pyta o niego osobno,
+        # bo skan podsieci potrafi trwać kilkanaście sekund.
+        self.scan: dict[str, Any] = {"running": False, "found": [], "note": ""}
 
     def ensure_renderer(self) -> upnp.Renderer | None:
         if self.renderer is None and self.renderer_error is None:
@@ -127,6 +138,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"lines": self.app.avr.log_tail(n)})
         elif route == "/api/renderer":
             self._json(self._renderer_payload())
+        elif route == "/api/scan":
+            self._json(self.app.scan)
         elif route.startswith("/media/"):
             self._serve_media(route[len("/media/"):])
         else:
@@ -134,7 +147,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def _state_payload(self) -> dict[str, Any]:
         state = self.app.avr.snapshot()
-        state["surround_modes"] = [{"code": c, "label": l} for c, l in SURROUND_MODES]
+        state["surround_modes"] = SURROUND_MODES
+        state["mode_categories"] = MODE_CATEGORIES
+        state["speaker_sizes"] = [{"code": c, "label": l} for c, l in SPEAKER_SIZES]
+        state["crossover_freqs"] = CROSSOVER_FREQS
+        state["speaker_positions"] = SPEAKER_POSITIONS
+        state["tips"] = TIPS
         state["now_playing"] = self.app.now_playing
         return state
 
@@ -210,6 +228,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(self._play(body))
             elif route == "/api/transport":
                 self._json(self._transport(body))
+            elif route == "/api/scan":
+                self._json(self._start_scan())
+            elif route == "/api/connect":
+                self._json(self._connect(body))
             else:
                 self.send_error(404)
         except (DenonTelnetError, upnp.UpnpError, ValueError) as e:
@@ -250,6 +272,31 @@ class Handler(BaseHTTPRequestHandler):
             avr.set_reference_level(str(value))
         elif action == "channel_level":
             avr.set_channel_level(str(body.get("channel")), float(value))
+
+        # --- zasilanie
+        elif action == "standby":
+            avr.standby()
+        elif action == "wake":
+            avr.wake()
+
+        # --- konfiguracja głośników
+        elif action == "speaker_size":
+            avr.set_speaker_size(str(body.get("position")), str(value))
+        elif action == "crossover":
+            avr.set_crossover(str(body.get("position")), int(value))
+        elif action == "crossover_all":
+            avr.set_crossover_all(int(value))
+        elif action == "subwoofer_mode":
+            avr.set_subwoofer_mode(str(value))
+        elif action == "lfe_lowpass":
+            avr.set_lfe_lowpass(int(value))
+        elif action == "subwoofer":
+            avr.set_subwoofer(bool(value))
+
+        # --- menu ekranowe (jedyna droga do uruchomienia kalibracji Audyssey)
+        elif action == "osd":
+            avr.osd(str(value))
+
         else:
             raise ValueError(f"nieznana akcja: {action}")
         return {"ok": True}
@@ -295,6 +342,51 @@ class Handler(BaseHTTPRequestHandler):
             "size": path.stat().st_size, "url": url,
         }
         return {"ok": True, "now_playing": self.app.now_playing}
+
+    # ---- wyszukiwanie i przepinanie amplitunera ------------------------
+
+    def _start_scan(self) -> dict[str, Any]:
+        """Uruchamia szukanie w tle. Skan podsieci trwa, więc nie blokujemy."""
+        if self.app.scan.get("running"):
+            return {"ok": True, "already": True}
+        self.app.scan = {"running": True, "found": [], "note": "szukam…"}
+
+        def work() -> None:
+            try:
+                def progress(done: int, total: int, net: str | None = None) -> None:
+                    if net:
+                        self.app.scan["note"] = f"skanuję {net}…"
+                    elif total:
+                        self.app.scan["note"] = f"sprawdzono {done} z {total} adresów"
+
+                found = discovery.discover(progress=progress)
+                self.app.scan = {
+                    "running": False,
+                    "found": [d.as_dict() for d in found],
+                    "note": (f"znaleziono {len(found)}" if found
+                             else "nic nie znalazłem w tej sieci"),
+                }
+            except Exception as e:                       # noqa: BLE001
+                self.app.scan = {"running": False, "found": [], "note": f"błąd: {e}"}
+
+        threading.Thread(target=work, daemon=True).start()
+        return {"ok": True}
+
+    def _connect(self, body: dict[str, Any]) -> dict[str, Any]:
+        host = (body.get("host") or "").strip()
+        if not host:
+            raise ValueError("podaj adres IP amplitunera")
+        # Sprawdzamy zanim się przepniemy - inaczej użytkownik traci działające
+        # połączenie za literówkę w adresie.
+        entry = discovery.identify(host)
+        if entry is None and not discovery._port_open(host, discovery.PORT_TELNET):
+            raise ValueError(f"pod {host} nie ma amplitunera (ani HTTP, ani telnetu)")
+        self.app.avr.reconnect(host)
+        discovery.save_host(host)
+        self.app.renderer = None
+        self.app.renderer_error = None
+        return {"ok": True, "host": host,
+                "model": entry.model if entry else None}
 
     def _transport(self, body: dict[str, Any]) -> dict[str, Any]:
         rend = self.app.ensure_renderer()

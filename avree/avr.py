@@ -41,15 +41,22 @@ CHANNEL_LABELS = {
     "SW": "Subwoofer 1", "SW2": "Subwoofer 2",
 }
 
-# Tryby dźwięku wysyłane jako MS<nazwa>. Dostępność zależy od formatu
-# wejściowego - amplituner odrzuci nieodpowiedni bez komunikatu błędu.
-SURROUND_MODES = [
-    ("DOLBY SURROUND", "Dolby Surround"), ("DTS NEURAL:X", "DTS Neural:X"),
-    ("DOLBY DIGITAL", "Dolby Digital"), ("DTS SURROUND", "DTS Surround"),
-    ("MOVIE", "Movie"), ("MUSIC", "Music"), ("GAME", "Game"),
-    ("MCH STEREO", "Multi Ch Stereo"), ("STEREO", "Stereo"),
-    ("AUTO", "Auto"), ("DIRECT", "Direct"), ("PURE DIRECT", "Pure Direct"),
-]
+# Tryby dźwięku, kategorie i opisy funkcji siedzą w modes.py - to wiedza
+# o urządzeniu (ustalona pomiarowo na egzemplarzu), nie o protokole.
+from .modes import MODE_CATEGORIES, SURROUND_MODES, TIPS  # noqa: E402,F401
+
+# Rozmiary głośników i dopuszczalne zwrotnice - do menu konfiguracji.
+SPEAKER_SIZES = [("LAR", "Large"), ("SMA", "Small"), ("NON", "Brak")]
+
+CROSSOVER_FREQS = [40, 60, 80, 90, 100, 110, 120, 150, 200, 250]
+
+# Klawisze nawigacji menu ekranowego - odpowiedniki strzałek na pilocie.
+OSD_KEYS = {
+    "menu_on": "MNMEN ON", "menu_off": "MNMEN OFF",
+    "up": "MNCUP", "down": "MNCDN", "left": "MNCLT", "right": "MNCRT",
+    "enter": "MNENT", "back": "MNRTN",
+    "info": "MNINF", "options": "MNOPT",
+}
 
 # Kod z SSINFAISSIG -> co faktycznie przyszło na wejście.
 INPUT_SIGNAL = {
@@ -134,6 +141,30 @@ class Avr:
             if self._telnet:
                 self._telnet.close()
                 self._telnet = None
+
+    def reconnect(self, host: str) -> None:
+        """Przepina się na inny adres bez restartu aplikacji.
+
+        Wątek podtrzymujący sam nawiąże połączenie od nowa, gdy zobaczy,
+        że gniazdo zniknęło.
+        """
+        with self._lock:
+            if self._telnet:
+                self._telnet.close()
+                self._telnet = None
+            self.host = host
+            self._state["connected"] = False
+            self._state["error"] = None
+            # Stan poprzedniego urządzenia byłby mylący przy nowym adresie.
+            for key in ("power", "zone", "volume_db", "volume_display", "mute",
+                        "source", "surround", "multeq", "dynamic_eq",
+                        "dynamic_volume", "reference_level", "subwoofer_mode",
+                        "lfe_lowpass", "crossover_mode", "amp_assign"):
+                self._state[key] = None
+            for key in ("channel_levels", "setup_levels", "sub_levels",
+                        "speakers", "crossovers", "device"):
+                self._state[key] = {}
+            self._state["sources"] = []
 
     def _keep_alive(self) -> None:
         """Łączy, a po zerwaniu połączenia próbuje ponownie co 5 s."""
@@ -260,6 +291,16 @@ class Avr:
             if ":" in body:
                 k, _, v = body.partition(":")
                 s["device"][k] = v.strip()
+            elif body.startswith("S/N"):
+                # 'VIALLS/N.6083603015'
+                s["device"]["SERIAL"] = body.lstrip("S/N.").strip()
+            elif " " in body.strip():
+                # Model z rewizją: 'VIALLAVRX3300W E2'. Pozostałe linie VIALL
+                # mają dwukropek albo są numerem seryjnym, więc spacja
+                # jednoznacznie wskazuje tę jedną.
+                model, _, revision = body.strip().partition(" ")
+                s["device"]["MODEL"] = model
+                s["device"]["REVISION"] = revision.strip()
         elif line.startswith("SSINFFRMAVR "):
             s["device"]["FIRMWARE"] = line[12:].strip()
         elif line.startswith("SSINFFRMDTS "):
@@ -353,9 +394,6 @@ class Avr:
     def set_mute(self, on: bool) -> None:
         self.send("MUON" if on else "MUOFF")
 
-    def set_power(self, on: bool) -> None:
-        self.send("ZMON" if on else "ZMOFF")
-
     def set_source(self, code: str) -> None:
         self.send("SI" + code)
 
@@ -383,3 +421,71 @@ class Avr:
             self.send("PSSWL2 " + code)
         else:
             self.send(f"CV{channel} {code}")
+
+    # ---- konfiguracja głośników -------------------------------------
+    #
+    # Te komendy zmieniają ustawienia zapisane w amplitunerze, a nie chwilowy
+    # stan odtwarzania. Dlatego każda kończy się ponownym odczytem - żeby
+    # interfejs pokazywał to, co urządzenie faktycznie przyjęło, a nie to,
+    # o co go poprosiliśmy.
+
+    def set_speaker_size(self, position: str, size: str) -> None:
+        """position: FRO/CEN/SUA/SWF...,  size: LAR/SMA/NON"""
+        if size not in {"LAR", "SMA", "NON", "2SP", "1SP"}:
+            raise ValueError(f"nieznany rozmiar: {size}")
+        self.send(f"SSSPC{position} {size}")
+        self._reread("SSSPC ?")
+
+    def set_crossover(self, position: str, freq: int) -> None:
+        self.send(f"SSCFR{position} {int(freq):03d}")
+        self._reread("SSCFR ?")
+
+    def set_crossover_all(self, freq: int) -> None:
+        self.send(f"SSCFRALL {int(freq):03d}")
+        self._reread("SSCFR ?")
+
+    def set_subwoofer_mode(self, mode: str) -> None:
+        """mode: 'LFE' albo 'L+M' (LFE + Main)"""
+        if mode not in {"LFE", "L+M"}:
+            raise ValueError(f"nieznany tryb subwoofera: {mode}")
+        self.send(f"SSSWM {mode}")
+        self._reread("SSSWM ?")
+
+    def set_lfe_lowpass(self, freq: int) -> None:
+        self.send(f"SSLFL {int(freq):03d}")
+        self._reread("SSLFL ?")
+
+    def set_subwoofer(self, on: bool) -> None:
+        self.send("PSSWR " + ("ON" if on else "OFF"))
+
+    def _reread(self, query: str) -> None:
+        """Po zmianie ustawienia dopytuje urządzenie, nie zgaduje wyniku."""
+        def later() -> None:
+            time.sleep(0.45)
+            try:
+                self.send(query)
+            except DenonTelnetError:
+                pass
+        threading.Thread(target=later, daemon=True).start()
+
+    # ---- menu ekranowe ----------------------------------------------
+    #
+    # Denon nie udostępnia komendy "uruchom kalibrację Audyssey". Jedyna droga
+    # to menu na ekranie - otwieramy je i nawigujemy tak, jak robi to pilot.
+    # Menu wychodzi wyłącznie przez HDMI MONITOR, więc projektor musi działać.
+
+    def osd(self, key: str) -> None:
+        command = OSD_KEYS.get(key)
+        if command is None:
+            raise ValueError(f"nieznany klawisz menu: {key}")
+        self.send(command)
+
+    def set_power(self, on: bool) -> None:
+        """Strefa główna. Całe urządzenie usypia się przez standby()."""
+        self.send("ZMON" if on else "ZMOFF")
+
+    def standby(self) -> None:
+        self.send("PWSTANDBY")
+
+    def wake(self) -> None:
+        self.send("PWON")
