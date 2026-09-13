@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AVREE Tuner</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div id="root">
+    <div class="topbar">
+      <div class="brand"><b>AVREE</b><span>TUNER</span></div>
+      <div class="sep"></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="dot" id="conn-dot"></span>
+        <span class="mono" style="font-size:12px" id="conn-host">—</span>
+        <span class="dim" style="font-size:12px" id="conn-note">łączę…</span>
+      </div>
+      <div class="chip" id="device-chip" hidden></div>
+      <div class="grow"></div>
+      <button class="btn" id="btn-refresh">Odśwież stan</button>
+    </div>
+
+    <div class="body">
+      <nav class="rail">
+        <div class="group">STEROWANIE</div>
+        <button data-tab="pulpit" class="active">Pulpit</button>
+        <button data-tab="odtwarzanie">Odtwarzanie</button>
+        <button data-tab="audyssey">Audyssey</button>
+        <button data-tab="glosniki">Głośniki</button>
+        <div class="group">NARZĘDZIA</div>
+        <button data-tab="konsola">Konsola protokołu</button>
+      </nav>
+
+      <main class="content" id="view"></main>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
