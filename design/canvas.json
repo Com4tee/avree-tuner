@@ -1,0 +1,26 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1440, "h": 900, "title": "Pulpit" },
+    { "file": "Odtwarzanie.dc.html", "x": 1560, "y": 0, "w": 1440, "h": 900, "title": "Odtwarzanie" },
+    { "file": "Audyssey.dc.html", "x": 3120, "y": 0, "w": 1440, "h": 900, "title": "Audyssey" },
+    { "file": "Glosniki.dc.html", "x": 0, "y": 1060, "w": 1440, "h": 900, "title": "Glosniki" },
+    { "file": "Pomiar.dc.html", "x": 1560, "y": 1060, "w": 1440, "h": 900, "title": "Pomiar" }
+  ],
+  "annotations": [
+    {
+      "id": "zrodlo-danych",
+      "x": 0,
+      "y": -180,
+      "w": 600,
+      "text": "Wszystkie wartosci na ekranach to realny odczyt z AVR-X3300W pod 192.168.0.73, zebrany przez telnet i HTTP.\nWyjatek: wykresy pomiarowe i wyliczone filtry - te sa szkicem, bo pomiaru jeszcze nie bylo."
+    },
+    {
+      "id": "tor-odtwarzania",
+      "x": 3120,
+      "y": 1060,
+      "w": 520,
+      "text": "Odtwarzanie z laptopa: petla WASAPI -> serwer HTTP w aplikacji -> SetAVTransportURI na UPnP amplitunera.\nDziala z czymkolwiek gra w przegladarce. Opoznienie ~1-2 s."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

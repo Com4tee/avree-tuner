@@ -1,0 +1,1005 @@
+<!doctype html>
+<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AVREE Tuner — mockup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+
+    body { margin: 0; background: #0e1012; color: #dce2e8;
+           font-family: 'IBM Plex Sans', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #e8a33d; text-decoration: none; }
+    a:hover { color: #f2bd6b; }
+  
+  html, body { background: #08090a; }
+  body { padding: 36px 28px 72px; }
+  .head { max-width: 1440px; margin: 0 auto 34px; }
+  .head h1 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .head h1 span { color: #e8a33d; font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.12em; }
+  .head p { font-size: 13px; color: #79838d; margin: 9px 0 0; line-height: 1.6; max-width: 800px; }
+  .screen { max-width: 1440px; margin: 0 auto 44px; }
+  .label { display: flex; align-items: baseline; gap: 12px; margin-bottom: 11px; flex-wrap: wrap; }
+  .label .num { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #e8a33d; }
+  .label .name { font-size: 14px; font-weight: 600; }
+  .label .desc { font-size: 12px; color: #5c656d; }
+  .frame { position: relative; width: 100%; aspect-ratio: 1440 / 900;
+            border: 1px solid #262c31; border-radius: 4px; overflow: hidden; background: #0e1012; }
+  .inner { position: absolute; top: 0; left: 0; width: 1440px; height: 900px; transform-origin: 0 0; }
+</style></head><body>
+  <div class="head">
+    <h1><span>AVREE</span> Tuner — mockup interfejsu</h1>
+    <p>Pięć ekranów aplikacji sterującej Denon AVR-X3300W. Stan urządzenia, konfiguracja głośników i lista obsługiwanych formatów to realny odczyt z amplitunera pod 192.168.0.73 przez telnet, HTTP i UPnP. Wykresy pomiarowe i wyliczone filtry są szkicem — pomiaru jeszcze nie było.</p>
+  </div>
+
+  <section class="screen">
+    <div class="label"><span class="num">01</span><span class="name">Pulpit</span><span class="desc">status urządzenia, tryb przestrzenny, głośność, stan korekcji</span></div>
+    <div class="frame"><div class="inner"><div style="width: 1440px; height: 900px; display: grid; grid-template-rows: 52px 1fr; background: #0e1012; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 20px; padding: 0 18px; background: #121518; border-bottom: 1px solid #262c31;">
+    <div style="display: flex; align-items: baseline; gap: 9px;">
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; letter-spacing: 0.14em; color: #e8a33d;">AVREE</span>
+      <span style="font-size: 12px; letter-spacing: 0.2em; color: #79838d;">TUNER</span>
+    </div>
+    <div style="width: 1px; height: 22px; background: #262c31;"></div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <svg width="9" height="9" viewBox="0 0 9 9"><circle cx="4.5" cy="4.5" r="4.5" fill="#3fc0c4"></circle></svg>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #dce2e8;">192.168.0.73</span>
+      <span style="font-size: 12px; color: #79838d;">&middot; telnet + http</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 4px 10px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+      <span style="font-size: 12px; font-weight: 600;">Denon AVR-X3300W</span>
+      <span style="font-size: 11px; color: #79838d;">KINO</span>
+    </div>
+    <div style="flex-grow: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid #262c31; border-radius: 3px;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#79838d" stroke-width="2"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"></path></svg>
+      <span style="font-size: 12px; color: #79838d;">Odśwież</span>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 188px 1fr; overflow: hidden;">
+
+    <div style="background: #121518; border-right: 1px solid #262c31; padding: 14px 0; display: flex; flex-direction: column; gap: 2px;">
+      <div style="padding: 0 16px 8px; font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">STEROWANIE</div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: #1b1f23; border-left: 2px solid #e8a33d; color: #dce2e8; font-size: 13px; font-weight: 500;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18"></path></svg>Pulpit
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18V9M9 18V5M14 18v-6M19 18v-9"></path></svg>Audyssey
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="3" width="12" height="18" rx="2"></rect><circle cx="12" cy="15" r="3"></circle><circle cx="12" cy="7.5" r="1.3"></circle></svg>Głośniki
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"></path><path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path></svg>Pomiar
+      </div>
+      <div style="padding: 18px 16px 8px; font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">NARZĘDZIA</div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>Konsola protokołu
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>Zrzuty stanu
+      </div>
+    </div>
+
+    <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px; overflow: hidden;">
+
+      <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; background: #221a13; border: 1px solid #6b4a1f; border-radius: 3px;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#e8a33d" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+        <div style="flex-grow: 1;">
+          <div style="font-size: 13px; font-weight: 600; color: #e8a33d;">Dynamic EQ jest włączony</div>
+          <div style="font-size: 12px; color: #9aa3ab; margin-top: 2px;">Podbija górę i dół pasma tym mocniej, im niżej grasz od poziomu referencyjnego. Przy aktywnych kolumnach PA z limiterem to główny podejrzany o wczesne limitowanie.</div>
+        </div>
+        <div style="padding: 6px 13px; background: #e8a33d; color: #12140f; font-size: 12px; font-weight: 600; border-radius: 3px;">Wyłącz</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr 300px; gap: 14px;">
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 13px 15px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d; margin-bottom: 11px;">URZĄDZENIE</div>
+          <div style="display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 12px;">
+            <span style="color: #79838d;">Model</span><span style="font-family: 'IBM Plex Mono', monospace;">AVR-X3300W</span>
+            <span style="color: #79838d;">Nr seryjny</span><span style="font-family: 'IBM Plex Mono', monospace;">6083603015</span>
+            <span style="color: #79838d;">Firmware</span><span style="font-family: 'IBM Plex Mono', monospace;">8700-4058-9103</span>
+            <span style="color: #79838d;">DSP</span><span style="font-family: 'IBM Plex Mono', monospace;">02.67</span>
+            <span style="color: #79838d;">DTS</span><span style="font-family: 'IBM Plex Mono', monospace;">3.90.50.00</span>
+            <span style="color: #79838d;">API</span><span style="font-family: 'IBM Plex Mono', monospace;">CommApiVers 0300</span>
+            <span style="color: #79838d;">Korekcja</span><span style="font-family: 'IBM Plex Mono', monospace; color: #3fc0c4;">Audyssey MultEQ XT32</span>
+          </div>
+        </div>
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 13px 15px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d; margin-bottom: 11px;">WEJŚCIE</div>
+          <div style="display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 12px;">
+            <span style="color: #79838d;">Źródło</span><span style="font-family: 'IBM Plex Mono', monospace;">MPLAY &middot; Media Player</span>
+            <span style="color: #79838d;">Wejście</span><span style="font-family: 'IBM Plex Mono', monospace;">HDMI</span>
+            <span style="color: #79838d;">Sygnał</span><span style="font-family: 'IBM Plex Mono', monospace;">SSINFAISSIG 12</span>
+            <span style="color: #79838d;">Strefa 2</span><span style="font-family: 'IBM Plex Mono', monospace; color: #79838d;">wyłączona</span>
+            <span style="color: #79838d;">Wzmacniacze</span><span style="font-family: 'IBM Plex Mono', monospace;">5 kanałów + ZONE2</span>
+            <span style="color: #79838d;">Subwoofery</span><span style="font-family: 'IBM Plex Mono', monospace;">2 &middot; LFE+Main</span>
+            <span style="color: #79838d;">Wyciszenie</span><span style="font-family: 'IBM Plex Mono', monospace;">OFF</span>
+          </div>
+        </div>
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 13px 15px; display: flex; flex-direction: column;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d; margin-bottom: 8px;">GŁOŚNOŚĆ</div>
+          <div style="display: flex; align-items: baseline; gap: 7px;">
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 40px; font-weight: 500; line-height: 1; color: #dce2e8;">&minus;75.0</span>
+            <span style="font-size: 14px; color: #79838d;">dB</span>
+          </div>
+          <div style="font-size: 11px; color: #79838d; margin-top: 5px; font-family: 'IBM Plex Mono', monospace;">wyświetlacz 5.0 &middot; limit 80</div>
+          <div style="margin-top: 13px; height: 5px; background: #23282d; border-radius: 3px; overflow: hidden;">
+            <div style="width: 8%; height: 100%; background: #3fc0c4;"></div>
+          </div>
+          <div style="display: flex; gap: 6px; margin-top: 13px;">
+            <div style="flex-grow: 1; text-align: center; padding: 7px 0; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 13px;">&minus;</div>
+            <div style="flex-grow: 1; text-align: center; padding: 7px 0; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 13px;">+</div>
+            <div style="flex-grow: 1; text-align: center; padding: 7px 0; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px; color: #9aa3ab;">Mute</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 13px 15px;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">TRYB PRZESTRZENNY</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #3fc0c4;">MSDOLBY SURROUND</div>
+          <div style="flex-grow: 1;"></div>
+          <div style="font-size: 11px; color: #5c656d;">dostępność zależy od formatu wejściowego i konfiguracji kolumn</div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px;">
+          <div style="padding: 9px 11px; background: #1f2a2b; border: 1px solid #3fc0c4; border-radius: 3px; font-size: 12px; font-weight: 600; color: #3fc0c4;">Dolby Surround</div>
+          <div style="padding: 9px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px;">Dolby Digital</div>
+          <div style="padding: 9px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px;">DTS Neural:X</div>
+          <div style="padding: 9px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px;">Multi Ch Stereo</div>
+          <div style="padding: 9px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px;">Stereo</div>
+          <div style="padding: 9px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px;">Direct</div>
+          <div style="padding: 9px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px;">Pure Direct</div>
+          <div style="padding: 9px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px;">Auto</div>
+          <div style="padding: 9px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px;">Movie</div>
+          <div style="padding: 9px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px;">Music</div>
+          <div style="padding: 9px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px;">Game</div>
+          <div style="padding: 9px 11px; background: #15181a; border: 1px solid #1f2429; border-radius: 3px; font-size: 12px; color: #4b545c;">Virtual</div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px;">
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 12px 14px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">MULTEQ XT32</div>
+          <div style="font-size: 17px; font-weight: 600; margin-top: 7px; color: #3fc0c4;">Reference</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5c656d; margin-top: 4px;">PSMULTEQ:AUDYSSEY</div>
+        </div>
+        <div style="background: #16191c; border: 1px solid #6b4a1f; border-radius: 3px; padding: 12px 14px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">DYNAMIC EQ</div>
+          <div style="font-size: 17px; font-weight: 600; margin-top: 7px; color: #e8a33d;">Włączony</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5c656d; margin-top: 4px;">PSDYNEQ ON</div>
+        </div>
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 12px 14px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">REF LEVEL OFFSET</div>
+          <div style="font-size: 17px; font-weight: 600; margin-top: 7px;">0 dB</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5c656d; margin-top: 4px;">PSREFLEV 0</div>
+        </div>
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 12px 14px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">DYNAMIC VOLUME</div>
+          <div style="font-size: 17px; font-weight: 600; margin-top: 7px; color: #79838d;">Wyłączony</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5c656d; margin-top: 4px;">PSDYNVOL OFF</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div></div></div>
+  </section>
+  <section class="screen">
+    <div class="label"><span class="num">02</span><span class="name">Odtwarzanie</span><span class="desc">foobar2000 przez DLNA, pętla WASAPI dla przeglądarki, sufit głośności</span></div>
+    <div class="frame"><div class="inner"><div style="width: 1440px; height: 900px; display: grid; grid-template-rows: 52px 1fr; background: #0e1012; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 20px; padding: 0 18px; background: #121518; border-bottom: 1px solid #262c31;">
+    <div style="display: flex; align-items: baseline; gap: 9px;">
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; letter-spacing: 0.14em; color: #e8a33d;">AVREE</span>
+      <span style="font-size: 12px; letter-spacing: 0.2em; color: #79838d;">TUNER</span>
+    </div>
+    <div style="width: 1px; height: 22px; background: #262c31;"></div>
+    <span style="font-size: 13px; font-weight: 600;">Odtwarzanie</span>
+    <div style="flex-grow: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 7px; padding: 4px 10px; background: #182220; border: 1px solid #2d4a48; border-radius: 3px;">
+      <svg width="11" height="11" viewBox="0 0 11 11"><circle cx="5.5" cy="5.5" r="5.5" fill="#3fc0c4"></circle></svg>
+      <span style="font-size: 11px; color: #3fc0c4;">strumień aktywny</span>
+    </div>
+    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5c656d;">UPnP AVTransport &middot; :8080</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 188px 1fr; overflow: hidden;">
+
+    <div style="background: #121518; border-right: 1px solid #262c31; padding: 14px 0; display: flex; flex-direction: column; gap: 2px;">
+      <div style="padding: 0 16px 8px; font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">STEROWANIE</div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18"></path></svg>Pulpit
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: #1b1f23; border-left: 2px solid #e8a33d; color: #dce2e8; font-size: 13px; font-weight: 500;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>Odtwarzanie
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18V9M9 18V5M14 18v-6M19 18v-9"></path></svg>Audyssey
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="3" width="12" height="18" rx="2"></rect><circle cx="12" cy="15" r="3"></circle><circle cx="12" cy="7.5" r="1.3"></circle></svg>Głośniki
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"></path><path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path></svg>Pomiar
+      </div>
+    </div>
+
+    <div style="padding: 16px; display: grid; grid-template-columns: 372px 1fr 268px; gap: 14px; overflow: hidden;">
+
+      <!-- źródło -->
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">ŹRÓDŁO DŹWIĘKU</div>
+
+        <div style="background: #16191c; border: 1px solid #3fc0c4; border-radius: 3px; padding: 14px 15px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#3fc0c4" stroke-width="1.8"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+            <div style="flex-grow: 1;">
+              <div style="font-size: 13px; font-weight: 600; color: #3fc0c4;">foobar2000 &rarr; amplituner</div>
+              <div style="font-size: 11px; color: #79838d; margin-top: 2px;">bezstratnie, bez przekodowania, z tagami</div>
+            </div>
+          </div>
+          <div style="margin-top: 12px; display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; font-size: 11px;">
+            <span style="color: #79838d;">Droga</span><span style="font-family: 'IBM Plex Mono', monospace;">foo_upnp &rarr; UPnP Renderer</span>
+            <span style="color: #79838d;">Strumień</span><span style="font-family: 'IBM Plex Mono', monospace;">FLAC 44.1 kHz &middot; 16 bit</span>
+            <span style="color: #79838d;">Przekodowanie</span><span style="font-family: 'IBM Plex Mono', monospace; color: #3fc0c4;">żadne</span>
+            <span style="color: #79838d;">Opóźnienie</span><span style="font-family: 'IBM Plex Mono', monospace; color: #3fc0c4;">bufor ~0.3 s</span>
+          </div>
+          <div style="margin-top: 11px; padding: 8px 10px; background: #182220; border-radius: 3px; font-size: 11px; color: #8fb8b6; line-height: 1.45;">
+            Najlepsza jakościowo droga. Aplikacja wskazuje foobarowi amplituner jako urządzenie docelowe i przejmuje transport oraz głośność.
+          </div>
+        </div>
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 13px 15px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#79838d" stroke-width="1.8"><rect x="2" y="4" width="20" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg>
+            <div style="flex-grow: 1;">
+              <div style="font-size: 13px; font-weight: 500;">Dźwięk z laptopa &mdash; pętla WASAPI</div>
+              <div style="font-size: 11px; color: #79838d; margin-top: 2px;">cokolwiek gra w przeglądarce: SoundCloud, YouTube, Bandcamp</div>
+            </div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #e8a33d;">~1.4 s</span>
+          </div>
+        </div>
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 13px 15px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#79838d" stroke-width="1.8"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.6 3.9A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"></path></svg>
+            <div style="flex-grow: 1;">
+              <div style="font-size: 13px; font-weight: 500;">Pliki z dysku</div>
+              <div style="font-size: 11px; color: #79838d; margin-top: 2px;">serwer DLNA w aplikacji, bez pośrednika</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #131618; border: 1px solid #1f2429; border-radius: 3px; padding: 12px 15px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#4b545c" stroke-width="1.8"><circle cx="12" cy="12" r="9"></circle><path d="M7.5 14.5c3-1 6.5-.8 9 .8M7 11c3.5-1.2 7.8-.9 10.6 1M7.5 7.6c4-1.3 8.8-.9 12 1.2"></path></svg>
+            <div style="flex-grow: 1;">
+              <div style="font-size: 13px; font-weight: 500; color: #6b747c;">Spotify Connect &middot; Bluetooth &middot; TuneIn</div>
+              <div style="font-size: 11px; color: #4b545c; margin-top: 2px;">amplituner obsługuje sam &mdash; aplikacja tylko przełącza źródło</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 12px 14px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d; margin-bottom: 9px;">CO RENDERER PRZYJMUJE</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+            <span style="padding: 3px 8px; background: #182220; border: 1px solid #2d4a48; border-radius: 2px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #3fc0c4;">FLAC</span>
+            <span style="padding: 3px 8px; background: #182220; border: 1px solid #2d4a48; border-radius: 2px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #3fc0c4;">WAV</span>
+            <span style="padding: 3px 8px; background: #182220; border: 1px solid #2d4a48; border-radius: 2px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #3fc0c4;">AIFF</span>
+            <span style="padding: 3px 8px; background: #182220; border: 1px solid #2d4a48; border-radius: 2px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #3fc0c4;">DSD</span>
+            <span style="padding: 3px 8px; background: #1b1f23; border: 1px solid #262c31; border-radius: 2px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #9aa3ab;">MP3</span>
+            <span style="padding: 3px 8px; background: #1b1f23; border: 1px solid #262c31; border-radius: 2px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #9aa3ab;">AAC / M4A</span>
+            <span style="padding: 3px 8px; background: #1b1f23; border: 1px solid #262c31; border-radius: 2px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #9aa3ab;">WMA</span>
+            <span style="padding: 3px 8px; background: #1b1f23; border: 1px solid #262c31; border-radius: 2px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #9aa3ab;">L16 48/2</span>
+            <span style="padding: 3px 8px; background: #241618; border: 1px solid #7a3230; border-radius: 2px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #e8635a; text-decoration: line-through;">AC3</span>
+            <span style="padding: 3px 8px; background: #241618; border: 1px solid #7a3230; border-radius: 2px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #e8635a; text-decoration: line-through;">DTS</span>
+          </div>
+          <div style="margin-top: 10px; padding: 8px 10px; background: #241618; border-radius: 3px; font-size: 11px; color: #a8746f; line-height: 1.45;">
+            Renderer sieciowy jest stereo. AC3 i DTS wymagają kabla &mdash; HDMI z bitstreamem albo optyka. Aplikacja przełączy wtedy źródło i tryb, ale strumienia nie poprowadzi.
+          </div>
+        </div>
+      </div>
+
+      <!-- teraz gra -->
+      <div style="display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+        <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">TERAZ GRA</div>
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 18px 20px; display: flex; flex-direction: column; flex-grow: 1;">
+          <div style="display: flex; gap: 18px; align-items: center;">
+            <div style="width: 78px; height: 78px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#3c454d" stroke-width="1.5"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+            </div>
+            <div style="flex-grow: 1; min-width: 0;">
+              <div style="font-size: 11px; color: #3fc0c4; letter-spacing: 0.1em;">FOOBAR2000 &middot; DLNA</div>
+              <div style="font-size: 19px; font-weight: 600; margin-top: 5px;">tytuł utworu z tagów</div>
+              <div style="font-size: 12px; color: #9aa3ab; margin-top: 3px;">wykonawca &middot; album &middot; 2019</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5c656d; margin-top: 6px;">FLAC 44.1 kHz / 16 bit &middot; 03:12 / 05:48</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 20px; flex-grow: 1; background: #101315; border: 1px solid #1f2429; border-radius: 3px; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #5c656d; width: 16px;">L</span>
+              <div style="flex-grow: 1; height: 13px; background: #16191c; border-radius: 2px; overflow: hidden; display: flex;">
+                <div style="width: 62%; background: #3fc0c4;"></div>
+                <div style="width: 9%; background: #e8a33d;"></div>
+              </div>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #9aa3ab; width: 46px; text-align: right;">&minus;7.2</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #5c656d; width: 16px;">R</span>
+              <div style="flex-grow: 1; height: 13px; background: #16191c; border-radius: 2px; overflow: hidden; display: flex;">
+                <div style="width: 59%; background: #3fc0c4;"></div>
+                <div style="width: 11%; background: #e8a33d;"></div>
+              </div>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #9aa3ab; width: 46px; text-align: right;">&minus;6.8</span>
+            </div>
+            <div style="flex-grow: 1;"></div>
+            <div style="display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #3c454d;">
+              <span>&minus;60</span><span>&minus;40</span><span>&minus;24</span><span>&minus;12</span><span>&minus;6</span><span style="color: #e8a33d;">0 dBFS</span>
+            </div>
+            <div style="display: flex; gap: 14px; padding-top: 8px; border-top: 1px solid #1f2429; font-size: 11px; color: #79838d;">
+              <span>bufor <span style="font-family: 'IBM Plex Mono', monospace; color: #dce2e8;">98%</span></span>
+              <span>przerwy <span style="font-family: 'IBM Plex Mono', monospace; color: #dce2e8;">0</span></span>
+              <span>czas <span style="font-family: 'IBM Plex Mono', monospace; color: #dce2e8;">00:41:17</span></span>
+            </div>
+          </div>
+
+          <div style="margin-top: 16px; display: flex; align-items: center; gap: 10px;">
+            <div style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#9aa3ab"><path d="M6 6h3v12H6zM11 12l9-6v12z"></path></svg>
+            </div>
+            <div style="width: 52px; height: 42px; display: flex; align-items: center; justify-content: center; background: #3fc0c4; border-radius: 3px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#0e1012"><path d="M7 5h4v14H7zM13 5h4v14h-4z"></path></svg>
+            </div>
+            <div style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#9aa3ab"><path d="M4 6l9 6-9 6zM15 6h3v12h-3z"></path></svg>
+            </div>
+            <div style="flex-grow: 1;"></div>
+            <div style="padding: 10px 15px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px; color: #9aa3ab;">Zatrzymaj strumień</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- głośność -->
+      <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 14px 15px; display: flex; flex-direction: column;">
+        <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">GŁOŚNOŚĆ AMPLITUNERA</div>
+
+        <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 10px;">
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 38px; font-weight: 500; line-height: 1;">&minus;42.5</span>
+          <span style="font-size: 13px; color: #79838d;">dB</span>
+        </div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5c656d; margin-top: 4px;">MV375 &middot; wyświetlacz 37.5</div>
+
+        <div style="display: flex; gap: 12px; margin-top: 14px; flex-grow: 1;">
+          <div style="width: 44px; background: #101315; border: 1px solid #1f2429; border-radius: 3px; position: relative; display: flex; flex-direction: column; justify-content: flex-end; padding: 6px;">
+            <div style="position: absolute; left: 0; right: 0; top: 27%; height: 2px; background: #e8635a;"></div>
+            <div style="height: 46%; background: #3fc0c4; border-radius: 2px;"></div>
+          </div>
+          <div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #3c454d; padding: 2px 0;">
+            <span>+18</span>
+            <span style="color: #e8635a;">&minus;28 sufit</span>
+            <span>&minus;40</span>
+            <span style="color: #3fc0c4;">&minus;42.5</span>
+            <span>&minus;60</span>
+            <span>&minus;80</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 6px; margin-top: 13px;">
+          <div style="flex-grow: 1; text-align: center; padding: 9px 0; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 12px;">&minus;0.5</div>
+          <div style="flex-grow: 1; text-align: center; padding: 9px 0; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 12px;">+0.5</div>
+          <div style="flex-grow: 1; text-align: center; padding: 9px 0; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px; color: #9aa3ab;">Mute</div>
+        </div>
+
+        <div style="margin-top: 13px; padding: 11px 12px; background: #241618; border: 1px solid #7a3230; border-radius: 3px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e8635a" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+            <span style="font-size: 12px; font-weight: 600; color: #e8635a; flex-grow: 1;">Sufit głośności</span>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #e8635a;">&minus;28.0</span>
+          </div>
+          <div style="font-size: 11px; color: #a8746f; margin-top: 6px; line-height: 1.45;">Aplikacja nie przepuści komendy powyżej tej wartości. Ustaw ją poniżej progu, przy którym zapalają się limitery kolumn.</div>
+        </div>
+
+        <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 6px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d; margin-bottom: 2px;">SZYBKIE POZIOMY</div>
+          <div style="display: flex; align-items: center; gap: 9px; padding: 8px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+            <span style="font-size: 12px; flex-grow: 1;">Tło</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #79838d;">&minus;55.0</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 9px; padding: 8px 11px; background: #1f2a2b; border: 1px solid #3fc0c4; border-radius: 3px;">
+            <span style="font-size: 12px; flex-grow: 1; color: #3fc0c4; font-weight: 600;">Słuchanie</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #3fc0c4;">&minus;42.5</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 9px; padding: 8px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+            <span style="font-size: 12px; flex-grow: 1;">Impreza</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #79838d;">&minus;30.0</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div></div></div>
+  </section>
+  <section class="screen">
+    <div class="label"><span class="num">03</span><span class="name">Audyssey</span><span class="desc">MultEQ / Dynamic EQ / Ref Level / Dynamic Volume + różnica ON-OFF</span></div>
+    <div class="frame"><div class="inner"><div style="width: 1440px; height: 900px; display: grid; grid-template-rows: 52px 1fr; background: #0e1012; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 20px; padding: 0 18px; background: #121518; border-bottom: 1px solid #262c31;">
+    <div style="display: flex; align-items: baseline; gap: 9px;">
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; letter-spacing: 0.14em; color: #e8a33d;">AVREE</span>
+      <span style="font-size: 12px; letter-spacing: 0.2em; color: #79838d;">TUNER</span>
+    </div>
+    <div style="width: 1px; height: 22px; background: #262c31;"></div>
+    <span style="font-size: 13px; font-weight: 600;">Audyssey MultEQ XT32</span>
+    <div style="flex-grow: 1;"></div>
+    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5c656d;">odczyt: 00:45:28</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 188px 1fr; overflow: hidden;">
+
+    <div style="background: #121518; border-right: 1px solid #262c31; padding: 14px 0; display: flex; flex-direction: column; gap: 2px;">
+      <div style="padding: 0 16px 8px; font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">STEROWANIE</div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18"></path></svg>Pulpit
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: #1b1f23; border-left: 2px solid #e8a33d; color: #dce2e8; font-size: 13px; font-weight: 500;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18V9M9 18V5M14 18v-6M19 18v-9"></path></svg>Audyssey
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="3" width="12" height="18" rx="2"></rect><circle cx="12" cy="15" r="3"></circle><circle cx="12" cy="7.5" r="1.3"></circle></svg>Głośniki
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"></path><path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path></svg>Pomiar
+      </div>
+    </div>
+
+    <div style="padding: 16px; display: grid; grid-template-columns: 430px 1fr; gap: 14px; overflow: hidden;">
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 14px 15px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d; margin-bottom: 4px;">KRZYWA KOREKCJI</div>
+          <div style="font-size: 11px; color: #79838d; margin-bottom: 11px;">Reference stosuje roll-off góry i kompensację średnicy. Flat nie stosuje żadnego &mdash; jest jaśniejszy.</div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px;">
+            <div style="padding: 10px 12px; background: #1f2a2b; border: 1px solid #3fc0c4; border-radius: 3px;">
+              <div style="font-size: 13px; font-weight: 600; color: #3fc0c4;">Reference</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #5c656d; margin-top: 3px;">AUDYSSEY</div>
+            </div>
+            <div style="padding: 10px 12px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+              <div style="font-size: 13px;">Flat</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #5c656d; margin-top: 3px;">FLAT</div>
+            </div>
+            <div style="padding: 10px 12px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+              <div style="font-size: 13px;">L/R Bypass</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #5c656d; margin-top: 3px;">BYP.LR</div>
+            </div>
+            <div style="padding: 10px 12px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+              <div style="font-size: 13px;">Wyłączony</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #5c656d; margin-top: 3px;">OFF</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #16191c; border: 1px solid #6b4a1f; border-radius: 3px; padding: 14px 15px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="flex-grow: 1;">
+              <div style="font-size: 13px; font-weight: 600;">Dynamic EQ</div>
+              <div style="font-size: 11px; color: #79838d; margin-top: 3px;">To loudness, nie korekcja pomieszczenia.</div>
+            </div>
+            <div style="display: flex; background: #1b1f23; border: 1px solid #6b4a1f; border-radius: 3px; overflow: hidden;">
+              <div style="padding: 6px 15px; font-size: 12px; color: #79838d;">Off</div>
+              <div style="padding: 6px 15px; font-size: 12px; font-weight: 600; background: #e8a33d; color: #12140f;">On</div>
+            </div>
+          </div>
+          <div style="margin-top: 11px; padding: 9px 11px; background: #221a13; border-radius: 3px; font-size: 11px; color: #c9a370; line-height: 1.5;">
+            Przy &minus;75 dB względem poziomu referencyjnego dokłada ok. <span style="font-family: 'IBM Plex Mono', monospace; font-weight: 600;">+8 dB</span> w górze pasma i <span style="font-family: 'IBM Plex Mono', monospace; font-weight: 600;">+11 dB</span> w dole. Kolumny aktywne PA wchodzą wtedy w limiter dużo wcześniej.
+          </div>
+        </div>
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 14px 15px;">
+          <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px;">
+            <div style="font-size: 13px; font-weight: 600;">Reference Level Offset</div>
+            <div style="font-size: 11px; color: #5c656d;">działa tylko przy włączonym Dynamic EQ</div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;">
+            <div style="padding: 8px 0; text-align: center; background: #1f2a2b; border: 1px solid #3fc0c4; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; color: #3fc0c4;">0 dB</div>
+            <div style="padding: 8px 0; text-align: center; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 12px;">+5</div>
+            <div style="padding: 8px 0; text-align: center; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 12px;">+10</div>
+            <div style="padding: 8px 0; text-align: center; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 12px;">+15</div>
+          </div>
+        </div>
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 14px 15px;">
+          <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px;">Dynamic Volume</div>
+          <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;">
+            <div style="padding: 8px 0; text-align: center; background: #1f2a2b; border: 1px solid #3fc0c4; border-radius: 3px; font-size: 12px; font-weight: 600; color: #3fc0c4;">Off</div>
+            <div style="padding: 8px 0; text-align: center; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px;">Light</div>
+            <div style="padding: 8px 0; text-align: center; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px;">Medium</div>
+            <div style="padding: 8px 0; text-align: center; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px;">Heavy</div>
+          </div>
+        </div>
+
+        <div style="background: #121518; border: 1px solid #262c31; border-radius: 3px; padding: 11px 13px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; line-height: 1.7; color: #79838d;">
+          <div><span style="color: #3fc0c4;">&gt;</span> PSMULTEQ: ?<span style="color: #dce2e8;">  PSMULTEQ:AUDYSSEY</span></div>
+          <div><span style="color: #3fc0c4;">&gt;</span> PSDYNEQ ?<span style="color: #e8a33d;">     PSDYNEQ ON</span></div>
+          <div><span style="color: #3fc0c4;">&gt;</span> PSDYNVOL ?<span style="color: #dce2e8;">    PSDYNVOL OFF</span></div>
+          <div><span style="color: #3fc0c4;">&gt;</span> PSREFLEV ?<span style="color: #dce2e8;">    PSREFLEV 0</span></div>
+        </div>
+
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 14px 16px; flex-grow: 1; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 3px;">
+            <div style="font-size: 13px; font-weight: 600;">Co Audyssey faktycznie robi</div>
+            <div style="flex-grow: 1;"></div>
+            <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 2px; background: #3fc0c4; display: inline-block;"></span><span style="font-size: 11px; color: #9aa3ab;">Front L</span></div>
+            <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 2px; background: #e8a33d; display: inline-block;"></span><span style="font-size: 11px; color: #9aa3ab;">Front R</span></div>
+          </div>
+          <div style="font-size: 11px; color: #79838d; margin-bottom: 12px;">Różnica zmierzonej odpowiedzi Audyssey ON &minus; OFF. To jedyny sposób, by zobaczyć korekcję &mdash; filtry FIR nie są czytelne z amplitunera.</div>
+
+          <div style="flex-grow: 1; background: #101315; border: 1px solid #1f2429; border-radius: 3px; padding: 10px;">
+            <svg viewBox="0 0 820 300" style="width: 100%; height: 100%;">
+              <line x1="60" y1="150" x2="800" y2="150" stroke="#2c3339" stroke-width="1"></line>
+              <line x1="60" y1="90" x2="800" y2="90" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="60" y1="30" x2="800" y2="30" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="60" y1="210" x2="800" y2="210" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="60" y1="270" x2="800" y2="270" stroke="#1f2429" stroke-width="1"></line>
+              <text x="48" y="34" text-anchor="end" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">+12</text>
+              <text x="48" y="94" text-anchor="end" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">+6</text>
+              <text x="48" y="154" text-anchor="end" fill="#79838d" font-size="11" font-family="IBM Plex Mono, monospace">0</text>
+              <text x="48" y="214" text-anchor="end" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">&#8722;6</text>
+              <text x="48" y="274" text-anchor="end" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">&#8722;12</text>
+
+              <line x1="185" y1="20" x2="185" y2="280" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="310" y1="20" x2="310" y2="280" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="435" y1="20" x2="435" y2="280" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="560" y1="20" x2="560" y2="280" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="685" y1="20" x2="685" y2="280" stroke="#1f2429" stroke-width="1"></line>
+              <text x="60" y="295" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">20</text>
+              <text x="185" y="295" text-anchor="middle" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">63</text>
+              <text x="310" y="295" text-anchor="middle" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">200</text>
+              <text x="435" y="295" text-anchor="middle" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">630</text>
+              <text x="560" y="295" text-anchor="middle" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">2k</text>
+              <text x="685" y="295" text-anchor="middle" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">6.3k</text>
+              <text x="795" y="295" text-anchor="end" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">20k</text>
+
+              <rect x="60" y="20" width="310" height="260" fill="#3fc0c4" opacity="0.035"></rect>
+              <text x="72" y="36" fill="#3fc0c4" font-size="10" opacity="0.6" font-family="IBM Plex Sans, sans-serif">strefa modalna &mdash; tu korekcja ma sens</text>
+
+              <path d="M60 196 L100 172 L140 118 L185 205 L230 141 L270 168 L310 152 L350 146 L400 149 L435 143 L480 138 L520 130 L560 122 L610 110 L650 102 L685 96 L730 88 L770 84 L800 82"
+                    fill="none" stroke="#3fc0c4" stroke-width="2" stroke-linejoin="round"></path>
+              <path d="M60 188 L100 180 L140 126 L185 198 L230 133 L270 175 L310 158 L350 151 L400 144 L435 139 L480 132 L520 126 L560 116 L610 104 L650 97 L685 90 L730 81 L770 76 L800 74"
+                    fill="none" stroke="#e8a33d" stroke-width="2" stroke-linejoin="round"></path>
+
+              <line x1="560" y1="20" x2="560" y2="280" stroke="#e8635a" stroke-width="1" stroke-dasharray="4 4"></line>
+              <text x="568" y="266" fill="#e8635a" font-size="11" font-family="IBM Plex Sans, sans-serif">od 2 kHz w górę tylko podbicie</text>
+            </svg>
+          </div>
+        </div>
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 13px 15px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d; margin-bottom: 10px;">BILANS KOREKCJI &mdash; MAKS. PODBICIE NA KANAŁ</div>
+          <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px;">
+            <div style="padding: 9px 11px; background: #241618; border: 1px solid #7a3230; border-radius: 3px;">
+              <div style="font-size: 11px; color: #9aa3ab;">Front L</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 17px; font-weight: 600; color: #e8635a; margin-top: 2px;">+6.8 dB</div>
+              <div style="font-size: 10px; color: #5c656d; margin-top: 2px;">przy 12.5 kHz</div>
+            </div>
+            <div style="padding: 9px 11px; background: #241618; border: 1px solid #7a3230; border-radius: 3px;">
+              <div style="font-size: 11px; color: #9aa3ab;">Front R</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 17px; font-weight: 600; color: #e8635a; margin-top: 2px;">+7.6 dB</div>
+              <div style="font-size: 10px; color: #5c656d; margin-top: 2px;">przy 14 kHz</div>
+            </div>
+            <div style="padding: 9px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+              <div style="font-size: 11px; color: #9aa3ab;">Center</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 17px; font-weight: 600; color: #e8a33d; margin-top: 2px;">+4.1 dB</div>
+              <div style="font-size: 10px; color: #5c656d; margin-top: 2px;">przy 9 kHz</div>
+            </div>
+            <div style="padding: 9px 11px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+              <div style="font-size: 11px; color: #9aa3ab;">Surround L</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 17px; font-weight: 600; color: #e8a33d; margin-top: 2px;">+3.4 dB</div>
+              <div style="font-size: 10px; color: #5c656d; margin-top: 2px;">przy 8 kHz</div>
+            </div>
+            <div style="padding: 9px 11px; background: #182220; border: 1px solid #2d4a48; border-radius: 3px;">
+              <div style="font-size: 11px; color: #9aa3ab;">Subwoofery</div>
+              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 17px; font-weight: 600; color: #3fc0c4; margin-top: 2px;">&minus;4.2 dB</div>
+              <div style="font-size: 10px; color: #5c656d; margin-top: 2px;">fazy wyrównane</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div></div></div>
+  </section>
+  <section class="screen">
+    <div class="label"><span class="num">04</span><span class="name">Głośniki</span><span class="desc">rozmiary, zwrotnice, poziomy, tryb subwooferów, rozkład w pomieszczeniu</span></div>
+    <div class="frame"><div class="inner"><div style="width: 1440px; height: 900px; display: grid; grid-template-rows: 52px 1fr; background: #0e1012; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 20px; padding: 0 18px; background: #121518; border-bottom: 1px solid #262c31;">
+    <div style="display: flex; align-items: baseline; gap: 9px;">
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; letter-spacing: 0.14em; color: #e8a33d;">AVREE</span>
+      <span style="font-size: 12px; letter-spacing: 0.2em; color: #79838d;">TUNER</span>
+    </div>
+    <div style="width: 1px; height: 22px; background: #262c31;"></div>
+    <span style="font-size: 13px; font-weight: 600;">Konfiguracja głośników</span>
+    <div style="flex-grow: 1;"></div>
+    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5c656d;">SSPAAMOD ZO2 &middot; 5 kanałów + strefa 2</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 188px 1fr; overflow: hidden;">
+
+    <div style="background: #121518; border-right: 1px solid #262c31; padding: 14px 0; display: flex; flex-direction: column; gap: 2px;">
+      <div style="padding: 0 16px 8px; font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">STEROWANIE</div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18"></path></svg>Pulpit
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18V9M9 18V5M14 18v-6M19 18v-9"></path></svg>Audyssey
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: #1b1f23; border-left: 2px solid #e8a33d; color: #dce2e8; font-size: 13px; font-weight: 500;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="3" width="12" height="18" rx="2"></rect><circle cx="12" cy="15" r="3"></circle><circle cx="12" cy="7.5" r="1.3"></circle></svg>Głośniki
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"></path><path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path></svg>Pomiar
+      </div>
+    </div>
+
+    <div style="padding: 16px; display: grid; grid-template-columns: 1fr 388px; gap: 14px; overflow: hidden;">
+
+      <div style="display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #221a13; border: 1px solid #6b4a1f; border-radius: 3px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e8a33d" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path></svg>
+          <div style="flex-grow: 1; font-size: 12px; color: #c9a370; line-height: 1.5;">
+            Wszystkie kanały ustawione jako <span style="font-weight: 600;">Large</span> &mdash; pełne pasmo trafia do kolumn PA, a zwrotnice 60 Hz są ignorowane. Przy dwóch subwooferach ustawienie <span style="font-weight: 600;">Small</span> ze zwrotnicą 80&ndash;100 Hz zdejmie dół z końcówek i da im zapas przed limiterem.
+          </div>
+        </div>
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr; gap: 0; padding: 9px 15px; background: #1b1f23; border-bottom: 1px solid #262c31; font-size: 10px; letter-spacing: 0.14em; color: #5c656d;">
+            <div>KANAŁ</div><div>ROZMIAR</div><div>ZWROTNICA</div><div>POZIOM</div><div>ODLEGŁOŚĆ</div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr; padding: 11px 15px; border-bottom: 1px solid #1f2429; font-size: 12px; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 9px;"><span style="width: 6px; height: 6px; background: #3fc0c4; border-radius: 50%;"></span><span style="font-weight: 500;">Front L</span><span style="font-family: 'IBM Plex Mono', monospace; color: #5c656d; font-size: 11px;">FL</span></div>
+            <div style="color: #e8a33d; font-weight: 500;">Large</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">60 Hz</div>
+            <div style="font-family: 'IBM Plex Mono', monospace;">0.0 dB</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">&mdash;</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr; padding: 11px 15px; border-bottom: 1px solid #1f2429; font-size: 12px; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 9px;"><span style="width: 6px; height: 6px; background: #3fc0c4; border-radius: 50%;"></span><span style="font-weight: 500;">Front R</span><span style="font-family: 'IBM Plex Mono', monospace; color: #5c656d; font-size: 11px;">FR</span></div>
+            <div style="color: #e8a33d; font-weight: 500;">Large</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">60 Hz</div>
+            <div style="font-family: 'IBM Plex Mono', monospace;">0.0 dB</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">&mdash;</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr; padding: 11px 15px; border-bottom: 1px solid #1f2429; font-size: 12px; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 9px;"><span style="width: 6px; height: 6px; background: #3fc0c4; border-radius: 50%;"></span><span style="font-weight: 500;">Center</span><span style="font-family: 'IBM Plex Mono', monospace; color: #5c656d; font-size: 11px;">C</span></div>
+            <div style="color: #e8a33d; font-weight: 500;">Large</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">60 Hz</div>
+            <div style="font-family: 'IBM Plex Mono', monospace;">0.0 dB</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">&mdash;</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr; padding: 11px 15px; border-bottom: 1px solid #1f2429; font-size: 12px; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 9px;"><span style="width: 6px; height: 6px; background: #3fc0c4; border-radius: 50%;"></span><span style="font-weight: 500;">Surround L</span><span style="font-family: 'IBM Plex Mono', monospace; color: #5c656d; font-size: 11px;">SL</span></div>
+            <div style="color: #e8a33d; font-weight: 500;">Large</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">60 Hz</div>
+            <div style="font-family: 'IBM Plex Mono', monospace;">0.0 dB</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">&mdash;</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr; padding: 11px 15px; border-bottom: 1px solid #1f2429; font-size: 12px; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 9px;"><span style="width: 6px; height: 6px; background: #3fc0c4; border-radius: 50%;"></span><span style="font-weight: 500;">Surround R</span><span style="font-family: 'IBM Plex Mono', monospace; color: #5c656d; font-size: 11px;">SR</span></div>
+            <div style="color: #e8a33d; font-weight: 500;">Large</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">60 Hz</div>
+            <div style="font-family: 'IBM Plex Mono', monospace;">0.0 dB</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">&mdash;</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr; padding: 11px 15px; border-bottom: 1px solid #1f2429; font-size: 12px; align-items: center; background: #141a1a;">
+            <div style="display: flex; align-items: center; gap: 9px;"><span style="width: 6px; height: 6px; background: #e8a33d; border-radius: 50%;"></span><span style="font-weight: 500;">Subwoofer 1</span><span style="font-family: 'IBM Plex Mono', monospace; color: #5c656d; font-size: 11px;">SW</span></div>
+            <div style="color: #9aa3ab;">aktywny</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">LPF 80 Hz</div>
+            <div style="font-family: 'IBM Plex Mono', monospace;">0.0 dB</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">&mdash;</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr; padding: 11px 15px; font-size: 12px; align-items: center; background: #141a1a;">
+            <div style="display: flex; align-items: center; gap: 9px;"><span style="width: 6px; height: 6px; background: #e8a33d; border-radius: 50%;"></span><span style="font-weight: 500;">Subwoofer 2</span><span style="font-family: 'IBM Plex Mono', monospace; color: #5c656d; font-size: 11px;">SW2</span></div>
+            <div style="color: #9aa3ab;">aktywny</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">LPF 80 Hz</div>
+            <div style="font-family: 'IBM Plex Mono', monospace;">0.0 dB</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; color: #5c656d;">&mdash;</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+          <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 12px 14px;">
+            <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">TRYB SUBWOOFERA</div>
+            <div style="font-size: 15px; font-weight: 600; margin-top: 6px; color: #e8a33d;">LFE + Main</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5c656d; margin-top: 3px;">SSSWM L+M</div>
+          </div>
+          <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 12px 14px;">
+            <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">FILTR LFE</div>
+            <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">80 Hz</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5c656d; margin-top: 3px;">SSLFL 080</div>
+          </div>
+          <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 12px 14px;">
+            <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">ZWROTNICE</div>
+            <div style="font-size: 15px; font-weight: 600; margin-top: 6px;">Indywidualne</div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5c656d; margin-top: 3px;">SSCFR IDV</div>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 14px 15px; display: flex; flex-direction: column;">
+        <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d; margin-bottom: 12px;">ROZKŁAD W POMIESZCZENIU</div>
+        <div style="flex-grow: 1; background: #101315; border: 1px solid #1f2429; border-radius: 3px; padding: 12px;">
+          <svg viewBox="0 0 340 420" style="width: 100%; height: 100%;">
+            <rect x="22" y="22" width="296" height="376" fill="none" stroke="#2c3339" stroke-width="1.5" rx="3"></rect>
+
+            <rect x="112" y="34" width="116" height="7" fill="#23282d" rx="2"></rect>
+            <text x="170" y="56" text-anchor="middle" fill="#5c656d" font-size="10" font-family="IBM Plex Sans, sans-serif">ekran</text>
+
+            <g>
+              <rect x="52" y="64" width="26" height="34" fill="#1b2b2c" stroke="#3fc0c4" stroke-width="1.5" rx="2"></rect>
+              <text x="65" y="86" text-anchor="middle" fill="#3fc0c4" font-size="11" font-weight="600" font-family="IBM Plex Mono, monospace">FL</text>
+            </g>
+            <g>
+              <rect x="157" y="64" width="26" height="34" fill="#1b2b2c" stroke="#3fc0c4" stroke-width="1.5" rx="2"></rect>
+              <text x="170" y="86" text-anchor="middle" fill="#3fc0c4" font-size="11" font-weight="600" font-family="IBM Plex Mono, monospace">C</text>
+            </g>
+            <g>
+              <rect x="262" y="64" width="26" height="34" fill="#1b2b2c" stroke="#3fc0c4" stroke-width="1.5" rx="2"></rect>
+              <text x="275" y="86" text-anchor="middle" fill="#3fc0c4" font-size="11" font-weight="600" font-family="IBM Plex Mono, monospace">FR</text>
+            </g>
+
+            <g>
+              <rect x="34" y="118" width="30" height="30" fill="#2b2318" stroke="#e8a33d" stroke-width="1.5" rx="2"></rect>
+              <text x="49" y="138" text-anchor="middle" fill="#e8a33d" font-size="10" font-weight="600" font-family="IBM Plex Mono, monospace">SW1</text>
+            </g>
+            <g>
+              <rect x="276" y="118" width="30" height="30" fill="#2b2318" stroke="#e8a33d" stroke-width="1.5" rx="2"></rect>
+              <text x="291" y="138" text-anchor="middle" fill="#e8a33d" font-size="10" font-weight="600" font-family="IBM Plex Mono, monospace">SW2</text>
+            </g>
+
+            <rect x="108" y="252" width="124" height="58" fill="#181c1f" stroke="#2c3339" stroke-width="1.5" rx="5"></rect>
+            <text x="170" y="286" text-anchor="middle" fill="#79838d" font-size="10" font-family="IBM Plex Sans, sans-serif">kanapa</text>
+            <circle cx="170" cy="264" r="4" fill="none" stroke="#e8635a" stroke-width="1.5"></circle>
+            <text x="182" y="268" fill="#e8635a" font-size="9" font-family="IBM Plex Sans, sans-serif">MLP</text>
+
+            <g>
+              <rect x="52" y="266" width="26" height="34" fill="#1b2b2c" stroke="#3fc0c4" stroke-width="1.5" rx="2"></rect>
+              <text x="65" y="288" text-anchor="middle" fill="#3fc0c4" font-size="11" font-weight="600" font-family="IBM Plex Mono, monospace">SL</text>
+            </g>
+            <g>
+              <rect x="262" y="266" width="26" height="34" fill="#1b2b2c" stroke="#3fc0c4" stroke-width="1.5" rx="2"></rect>
+              <text x="275" y="288" text-anchor="middle" fill="#3fc0c4" font-size="11" font-weight="600" font-family="IBM Plex Mono, monospace">SR</text>
+            </g>
+
+            <line x1="65" y1="98" x2="165" y2="256" stroke="#2c3339" stroke-width="1" stroke-dasharray="3 4"></line>
+            <line x1="275" y1="98" x2="175" y2="256" stroke="#2c3339" stroke-width="1" stroke-dasharray="3 4"></line>
+
+            <text x="170" y="380" text-anchor="middle" fill="#5c656d" font-size="10" font-family="IBM Plex Sans, sans-serif">odległości nie są czytelne po telnecie</text>
+            <text x="170" y="394" text-anchor="middle" fill="#5c656d" font-size="10" font-family="IBM Plex Sans, sans-serif">&mdash; zostaną wyliczone z pomiaru</text>
+          </svg>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div></div></div>
+  </section>
+  <section class="screen">
+    <div class="label"><span class="num">05</span><span class="name">Pomiar</span><span class="desc">tor pomiarowy, pozycje mikrofonu, ograniczenia optymalizatora, filtry</span></div>
+    <div class="frame"><div class="inner"><div style="width: 1440px; height: 900px; display: grid; grid-template-rows: 52px 1fr; background: #0e1012; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 20px; padding: 0 18px; background: #121518; border-bottom: 1px solid #262c31;">
+    <div style="display: flex; align-items: baseline; gap: 9px;">
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; letter-spacing: 0.14em; color: #e8a33d;">AVREE</span>
+      <span style="font-size: 12px; letter-spacing: 0.2em; color: #79838d;">TUNER</span>
+    </div>
+    <div style="width: 1px; height: 22px; background: #262c31;"></div>
+    <span style="font-size: 13px; font-weight: 600;">Pomiar i kalibracja</span>
+    <div style="flex-grow: 1;"></div>
+    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #5c656d;">sesja 2026-09-14 &middot; pozycja 3 z 6</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 188px 1fr; overflow: hidden;">
+
+    <div style="background: #121518; border-right: 1px solid #262c31; padding: 14px 0; display: flex; flex-direction: column; gap: 2px;">
+      <div style="padding: 0 16px 8px; font-size: 10px; letter-spacing: 0.16em; color: #5c656d;">STEROWANIE</div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18"></path></svg>Pulpit
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18V9M9 18V5M14 18v-6M19 18v-9"></path></svg>Audyssey
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-left: 2px solid transparent; color: #9aa3ab; font-size: 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="3" width="12" height="18" rx="2"></rect><circle cx="12" cy="15" r="3"></circle><circle cx="12" cy="7.5" r="1.3"></circle></svg>Głośniki
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: #1b1f23; border-left: 2px solid #e8a33d; color: #dce2e8; font-size: 13px; font-weight: 500;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"></path><path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path></svg>Pomiar
+      </div>
+    </div>
+
+    <div style="padding: 16px; display: grid; grid-template-columns: 330px 1fr; gap: 14px; overflow: hidden;">
+
+      <div style="display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 13px 15px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d; margin-bottom: 11px;">TOR POMIAROWY</div>
+          <div style="display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 11.5px;">
+            <span style="color: #79838d;">Mikrofon</span><span style="font-family: 'IBM Plex Mono', monospace;">Behringer ECM8000</span>
+            <span style="color: #79838d;">Kalibracja</span><span style="font-family: 'IBM Plex Mono', monospace; color: #e8a33d;">brak pliku &mdash; wczytaj</span>
+            <span style="color: #79838d;">Interfejs</span><span style="font-family: 'IBM Plex Mono', monospace;">ASIO &middot; 48 kHz</span>
+            <span style="color: #79838d;">Wyjście</span><span style="font-family: 'IBM Plex Mono', monospace;">HDMI &rarr; AVR</span>
+            <span style="color: #79838d;">Pętla odn.</span><span style="font-family: 'IBM Plex Mono', monospace; color: #3fc0c4;">aktywna</span>
+          </div>
+          <div style="margin-top: 10px; padding: 8px 10px; background: #1b1f23; border-radius: 3px; font-size: 11px; color: #79838d; line-height: 1.45;">
+            Mikrofon Denona (piramidka) nie nadaje się do tego toru &mdash; nie ma pliku kalibracyjnego i pracuje tylko z wewnętrzną procedurą amplitunera.
+          </div>
+        </div>
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 13px 15px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d; margin-bottom: 11px;">POZYCJE MIKROFONU</div>
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="display: flex; align-items: center; gap: 9px; padding: 7px 10px; background: #182220; border: 1px solid #2d4a48; border-radius: 3px; font-size: 12px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3fc0c4" stroke-width="2.5"><path d="M20 6L9 17l-5-5"></path></svg>
+              <span style="flex-grow: 1;">1 &mdash; MLP, środek kanapy</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #5c656d;">7 kan.</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 9px; padding: 7px 10px; background: #182220; border: 1px solid #2d4a48; border-radius: 3px; font-size: 12px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3fc0c4" stroke-width="2.5"><path d="M20 6L9 17l-5-5"></path></svg>
+              <span style="flex-grow: 1;">2 &mdash; lewe miejsce</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #5c656d;">7 kan.</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 9px; padding: 7px 10px; background: #221a13; border: 1px solid #6b4a1f; border-radius: 3px; font-size: 12px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#e8a33d" stroke-width="2"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+              <span style="flex-grow: 1; color: #e8a33d; font-weight: 500;">3 &mdash; prawe miejsce</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #e8a33d;">4 / 7</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 9px; padding: 7px 10px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px; color: #79838d;">
+              <span style="width: 13px; height: 13px; border: 1px solid #3c454d; border-radius: 50%;"></span>
+              <span style="flex-grow: 1;">4 &mdash; za kanapą, lewo</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 9px; padding: 7px 10px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px; color: #79838d;">
+              <span style="width: 13px; height: 13px; border: 1px solid #3c454d; border-radius: 50%;"></span>
+              <span style="flex-grow: 1;">5 &mdash; za kanapą, prawo</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 9px; padding: 7px 10px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px; color: #79838d;">
+              <span style="width: 13px; height: 13px; border: 1px solid #3c454d; border-radius: 50%;"></span>
+              <span style="flex-grow: 1;">6 &mdash; wysokość uszu, stojąc</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #16191c; border: 1px solid #7a3230; border-radius: 3px; padding: 13px 15px;">
+          <div style="font-size: 10px; letter-spacing: 0.16em; color: #e8635a; margin-bottom: 10px;">OGRANICZENIA OPTYMALIZATORA</div>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 11.5px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3fc0c4" stroke-width="2.5"><path d="M20 6L9 17l-5-5"></path></svg>
+              <span style="flex-grow: 1;">Tylko cięcia</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #3fc0c4;">wzm. &le; 0 dB</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3fc0c4" stroke-width="2.5"><path d="M20 6L9 17l-5-5"></path></svg>
+              <span style="flex-grow: 1;">Górna granica korekcji</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #3fc0c4;">300 Hz</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3fc0c4" stroke-width="2.5"><path d="M20 6L9 17l-5-5"></path></svg>
+              <span style="flex-grow: 1;">Wyrównanie faz subów</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #3fc0c4;">tak</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3fc0c4" stroke-width="2.5"><path d="M20 6L9 17l-5-5"></path></svg>
+              <span style="flex-grow: 1;">Maks. dobroć filtra</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #3fc0c4;">Q &le; 8</span>
+            </div>
+          </div>
+          <div style="margin-top: 10px; font-size: 11px; color: #a8746f; line-height: 1.45;">Kolumny aktywne PA mają własny limiter. Każdy dodatni decybel korekcji skraca zapas przed jego zadziałaniem.</div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+
+        <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 14px 16px; flex-grow: 1; display: flex; flex-direction: column;">
+          <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 12px;">
+            <div style="font-size: 13px; font-weight: 600;">Front L &mdash; uśrednienie 3 pozycji</div>
+            <div style="flex-grow: 1;"></div>
+            <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 2px; background: #5c656d; display: inline-block;"></span><span style="font-size: 11px; color: #9aa3ab;">zmierzone</span></div>
+            <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 2px; background: #e8a33d; display: inline-block;"></span><span style="font-size: 11px; color: #9aa3ab;">cel</span></div>
+            <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 2px; background: #3fc0c4; display: inline-block;"></span><span style="font-size: 11px; color: #9aa3ab;">po korekcji</span></div>
+          </div>
+
+          <div style="flex-grow: 1; background: #101315; border: 1px solid #1f2429; border-radius: 3px; padding: 10px;">
+            <svg viewBox="0 0 920 340" style="width: 100%; height: 100%;">
+              <line x1="56" y1="60" x2="900" y2="60" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="56" y1="120" x2="900" y2="120" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="56" y1="180" x2="900" y2="180" stroke="#2c3339" stroke-width="1"></line>
+              <line x1="56" y1="240" x2="900" y2="240" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="56" y1="300" x2="900" y2="300" stroke="#1f2429" stroke-width="1"></line>
+              <text x="46" y="64" text-anchor="end" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">90</text>
+              <text x="46" y="124" text-anchor="end" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">85</text>
+              <text x="46" y="184" text-anchor="end" fill="#79838d" font-size="11" font-family="IBM Plex Mono, monospace">80</text>
+              <text x="46" y="244" text-anchor="end" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">75</text>
+              <text x="46" y="304" text-anchor="end" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">70</text>
+
+              <line x1="200" y1="24" x2="200" y2="316" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="340" y1="24" x2="340" y2="316" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="480" y1="24" x2="480" y2="316" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="620" y1="24" x2="620" y2="316" stroke="#1f2429" stroke-width="1"></line>
+              <line x1="760" y1="24" x2="760" y2="316" stroke="#1f2429" stroke-width="1"></line>
+              <text x="56" y="332" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">20</text>
+              <text x="200" y="332" text-anchor="middle" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">63</text>
+              <text x="340" y="332" text-anchor="middle" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">200</text>
+              <text x="480" y="332" text-anchor="middle" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">630</text>
+              <text x="620" y="332" text-anchor="middle" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">2k</text>
+              <text x="760" y="332" text-anchor="middle" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">6.3k</text>
+              <text x="896" y="332" text-anchor="end" fill="#5c656d" font-size="11" font-family="IBM Plex Mono, monospace">20k</text>
+
+              <rect x="390" y="24" width="510" height="292" fill="#0e1012" opacity="0.55"></rect>
+              <line x1="390" y1="24" x2="390" y2="316" stroke="#e8635a" stroke-width="1.5" stroke-dasharray="5 4"></line>
+              <text x="400" y="42" fill="#e8635a" font-size="11" font-family="IBM Plex Sans, sans-serif">300 Hz &mdash; powyżej nie korygujemy</text>
+
+              <path d="M56 268 L100 214 L140 166 L175 108 L200 222 L240 148 L280 196 L320 152 L340 178 L390 170 L440 186 L480 164 L540 178 L600 158 L660 182 L720 166 L780 190 L840 174 L900 196"
+                    fill="none" stroke="#5c656d" stroke-width="1.8" stroke-linejoin="round"></path>
+              <path d="M56 196 L140 182 L200 178 L280 176 L340 176 L390 178 L480 180 L600 184 L720 188 L830 196 L900 210"
+                    fill="none" stroke="#e8a33d" stroke-width="1.8" stroke-dasharray="6 4" stroke-linejoin="round"></path>
+              <path d="M56 214 L100 196 L140 180 L175 172 L200 186 L240 174 L280 182 L320 174 L340 178 L390 170"
+                    fill="none" stroke="#3fc0c4" stroke-width="2.4" stroke-linejoin="round"></path>
+            </svg>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 300px; gap: 12px;">
+          <div style="background: #16191c; border: 1px solid #262c31; border-radius: 3px; padding: 13px 15px;">
+            <div style="font-size: 10px; letter-spacing: 0.16em; color: #5c656d; margin-bottom: 10px;">WYLICZONE FILTRY &mdash; FRONT L</div>
+            <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;">
+              <div style="padding: 8px 10px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600;">43 Hz</div>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #e8635a; margin-top: 2px;">&minus;6.4 dB</div>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #5c656d;">Q 4.2</div>
+              </div>
+              <div style="padding: 8px 10px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600;">67 Hz</div>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #e8635a; margin-top: 2px;">&minus;4.1 dB</div>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #5c656d;">Q 6.0</div>
+              </div>
+              <div style="padding: 8px 10px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600;">122 Hz</div>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #e8635a; margin-top: 2px;">&minus;3.2 dB</div>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #5c656d;">Q 3.1</div>
+              </div>
+              <div style="padding: 8px 10px; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px;">
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600;">208 Hz</div>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #e8635a; margin-top: 2px;">&minus;2.5 dB</div>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #5c656d;">Q 5.4</div>
+              </div>
+            </div>
+            <div style="margin-top: 10px; font-size: 11px; color: #79838d;">Suma podbicia: <span style="font-family: 'IBM Plex Mono', monospace; color: #3fc0c4;">0.0 dB</span> &middot; zapas przed limiterem zachowany</div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 7px;">
+            <div style="text-align: center; padding: 11px 0; background: #3fc0c4; color: #0e1012; border-radius: 3px; font-size: 13px; font-weight: 600;">Zmierz pozycję 3</div>
+            <div style="text-align: center; padding: 10px 0; background: #1b1f23; border: 1px solid #262c31; border-radius: 3px; font-size: 12px; color: #9aa3ab;">Oblicz filtry</div>
+            <div style="text-align: center; padding: 10px 0; background: #1b1f23; border: 1px solid #3c454d; border-radius: 3px; font-size: 12px; color: #5c656d;">Zapisz .ady &mdash; wymaga kompletu pozycji</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div></div></div>
+  </section>
+<script>
+  function fit() { document.querySelectorAll('.frame').forEach(function (f) {
+      f.querySelector('.inner').style.transform = 'scale(' + (f.clientWidth / 1440) + ')'; }); }
+  window.addEventListener('resize', fit); fit();
+</script></body></html>
