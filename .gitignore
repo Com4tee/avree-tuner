@@ -1,0 +1,12 @@
+# Zrzuty z urządzenia - zawierają numer seryjny, MAC i nazwy sieci.
+# Trzymamy lokalnie, nie w repo.
+captures/
+*.ady
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.idea/
+.vscode/

@@ -1,0 +1,7 @@
+# Rdzeń nie ma zależności - telnet i HTTP na stdlib.
+# GUI (etap 2):
+fastapi>=0.115
+uvicorn[standard]>=0.32
+# Analiza pomiarów (etap 3):
+numpy>=2.1
+scipy>=1.14
