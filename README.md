@@ -67,7 +67,7 @@ python tools/mapper.py <ip>          # mapowanie nieudokumentowanych komend
 | 3 | Silnik pomiarowy — sweep, dekonwolucja, analiza ✔ |
 | 4 | Wejście audio i wizualizacja z mikrofonu ✔ |
 | 5 | Własny optymalizator filtrów ✔ |
-| 6 | Parser `.ady` i upload kalibracji do amplitunera |
+| 6 | Parser `.ady` i upload kalibracji — **kanał znaleziony**, port 1256 |
 
 ## Splot w torze PC
 
@@ -191,6 +191,33 @@ Maksimum znalezione dla jednej pozycji mikrofonu jest optymalne dla tej
 pozycji. Przy szerokiej kanapie trzeba powtórzyć w kilku punktach i wziąć
 nastawę dobrą wszędzie, zamiast idealnej w jednym miejscu.
 
+## Drugi kanał: protokół Audyssey na porcie 1256
+
+**Sprostowanie do wcześniejszych wniosków.** Twierdziłem tu, że z wzmacniacza
+nie da się wyciągnąć danych pomiarowych i że komunikacja jest jednokierunkowa.
+**To było błędne.** Amplituner nasłuchuje na TCP 1256 i odpowiada JSON-em:
+
+```
+GET_AVRINF -> {"EQType":"MultEQXT32","SWLvlMatch":true,"SysDelay":280,...}
+GET_AVRSTS -> {"ChSetup":[{"FL":"L"},{"C":"L"},{"FR":"L"},{"SLA":"L"},
+                          {"SRA":"L"},{"SWMIX1":"E"},{"SWMIX2":"E"}],...}
+```
+
+To ten sam kanał, którym płatna aplikacja MultEQ Editor czyta pomiary
+i wgrywa korekcję. Pełny opis: [docs/protokol-audyssey-1256.md](docs/protokol-audyssey-1256.md).
+
+Kodek ramek w [avree/audyssey.py](avree/audyssey.py) daje bajty identyczne
+z sześcioma opublikowanymi wzorcami i czyta z urządzenia na żywo.
+
+**Czego nadal nie da się odczytać:** gotowych krzywych korekcyjnych.
+`SET_COEFDT` jest tylko do zapisu. Ale pętla domyka się inaczej — wzmacniacz
+mierzy (`START_CHNL`), my odbieramy odpowiedzi impulsowe (`GET_RESPON`),
+liczymy własne filtry i wgrywamy z powrotem.
+
+**Ryzyko:** `ENTER_AUDY` rozpoczyna nową kalibrację i może nadpisać obecne
+krzywe Audyssey. Powrót to przejście całej procedury od nowa. Nie wchodzić
+w ten tryb bez świadomej decyzji.
+
 ## Ograniczenia ustalone empirycznie
 
 - Odległości głośników **czyta i ustawia `SSSDE`**, krok 1 cm, każdy sub osobno.
@@ -236,6 +263,9 @@ w innym pokoju niż ekrany.
 - [ ] Zestrojenie subwooferów **akustycznie** — sterowanie odległością
       sprawdzone na sprzęcie, silnik na symulacji, ale przemiatania
       z mikrofonem jeszcze nikt nie uruchomił
+- [ ] `ENTER_AUDY` / `EXIT_AUDMD` — komendy potwierdzone jako istniejące,
+      ale NIEURUCHOMIONE. Wejście w tryb kalibracji ryzykuje nadpisanie
+      obecnych krzywych, więc czeka na moment planowanej rekalibracji
 - [ ] Blokada auto-wyłączania — potwierdzenia wymaga dopiero dłuższy seans
 - [ ] Splot w torze PC **na ucho** — poprawność liczbowa i transport są
       zmierzone, ale nikt jeszcze nie słuchał wyniku przez głośniki
