@@ -17,7 +17,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from . import cast, discovery, eq, projector as projector_mod, upnp, webos
+from . import (androidtv, cast, discovery, eq,
+               projector as projector_mod, upnp, webos)
 from .avr import (
     CROSSOVER_FREQS,
     OSD_KEYS,
@@ -72,6 +73,11 @@ class App:
         self.eq = eq.load()
         self.projector = projector_mod.Projector()
         self.webos = projector_mod.WebOsHub()
+        # Piloty Android TV trzymamy per adres - połączenie jest trwałe,
+        # a urządzenie zamyka je po ~30 s bezczynności i odtwarzamy je
+        # przy następnym klawiszu.
+        self.atv: dict[str, androidtv.AndroidTv] = {}
+        self.atv_pairing: dict[str, Any] = {}
         self.projector_scan = {"running": False, "found": [], "note": ""}
         self.cast = cast.CastHub()
 
@@ -157,6 +163,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(self.app.projector_scan)
         elif route == "/api/cast":
             self._json(self._cast_payload())
+        elif route == "/api/androidtv":
+            self._json(self._atv_payload())
         elif route == "/api/webos":
             self._json({"devices": self.app.webos.overview(),
                         "note": self.app.webos.scan_note,
@@ -267,6 +275,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(self._cast_action(body))
             elif route == "/api/webos":
                 self._json(self._webos_action(body))
+            elif route == "/api/androidtv":
+                self._json(self._atv_action(body))
             else:
                 self.send_error(404)
         except (DenonTelnetError, upnp.UpnpError, ValueError) as e:
@@ -396,6 +406,84 @@ class Handler(BaseHTTPRequestHandler):
             "size": path.stat().st_size, "url": url,
         }
         return {"ok": True, "now_playing": self.app.now_playing}
+
+    # ---- Android TV / Google TV ----------------------------------------
+
+    def _atv_payload(self) -> dict[str, Any]:
+        pairing = self.app.atv_pairing
+        return {
+            "keys": sorted(androidtv.KEYS),
+            "devices": [
+                {"host": host, "paired": androidtv.is_paired(host),
+                 "connected": dev.connected, "name": dev.name}
+                for host, dev in self.app.atv.items()
+            ],
+            "pairing": {"host": pairing.get("host"),
+                        "waiting": bool(pairing.get("waiting")),
+                        "error": pairing.get("error"),
+                        "done": bool(pairing.get("done"))},
+        }
+
+    def _atv_device(self, host: str) -> androidtv.AndroidTv:
+        device = self.app.atv.get(host)
+        if device is None:
+            device = androidtv.AndroidTv(host)
+            self.app.atv[host] = device
+        return device
+
+    def _atv_action(self, body: dict[str, Any]) -> dict[str, Any]:
+        action = str(body.get("action") or "")
+        host = str(body.get("host") or "")
+        if not host:
+            raise ValueError("nie wskazano urządzenia")
+
+        if action == "pair_start":
+            return self._atv_pair_start(host)
+        if action == "pair_code":
+            code = str(body.get("code") or "").strip()
+            if not code:
+                raise ValueError("podaj kod z ekranu")
+            self.app.atv_pairing["code"] = code
+            return {"ok": True}
+
+        try:
+            if action == "press":
+                self._atv_device(host).press(str(body.get("value")))
+            elif action == "disconnect":
+                self._atv_device(host).close()
+            else:
+                raise ValueError(f"nieznana akcja: {action}")
+        except androidtv.AndroidTvError as e:
+            raise ValueError(str(e)) from e
+        return {"ok": True}
+
+    def _atv_pair_start(self, host: str) -> dict[str, Any]:
+        """Parowanie w tle: kod pojawia się na ekranie, my czekamy na jego treść."""
+        state = self.app.atv_pairing
+        if state.get("waiting"):
+            return {"ok": True, "already": True}
+        state.clear()
+        state.update({"host": host, "waiting": True, "code": None,
+                      "error": None, "done": False})
+
+        def wait_for_code() -> str:
+            for _ in range(300):
+                if state.get("code"):
+                    return state["code"]
+                time.sleep(1)
+            raise androidtv.AndroidTvError("nie doczekałem się kodu")
+
+        def work() -> None:
+            try:
+                androidtv.pair(host, wait_for_code)
+                state.update({"done": True, "error": None})
+            except Exception as e:                   # noqa: BLE001
+                state["error"] = str(e)
+            finally:
+                state["waiting"] = False
+
+        threading.Thread(target=work, daemon=True).start()
+        return {"ok": True}
 
     # ---- urządzenia webOS (rzutnik i telewizor) ------------------------
 

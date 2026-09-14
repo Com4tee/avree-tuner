@@ -189,3 +189,54 @@ Aplikacja wysyła je w regulowanym odstępie (domyślnie 30 min).
 
 To obejście oparte na mechanizmie działania licznika — potwierdzenia
 w praktyce wymaga dopiero dłuższy seans.
+
+
+---
+
+# Android TV Remote v2 — Google TV
+
+Sparowane z `192.168.0.58` („Kino Lodownia").
+
+## Protokół
+
+Dwa porty, oba TLS z **certyfikatem klienta** (samopodpisanym, generowanym raz
+i zapamiętywanym — jego utrata oznacza parowanie od nowa):
+
+| Port | Rola |
+|---|---|
+| 6467 | parowanie, jednorazowo, kodem z ekranu |
+| 6466 | pilot, połączenie trwałe |
+
+Ramki: długość jako **varint** (nie cztery bajty, jak w Cast), potem protobuf.
+
+## Bajt kontrolny — jak uniknąć zgadywania
+
+Sekret parowania to SHA-256 z modulusa i wykładnika obu kluczy publicznych
+plus kodu z ekranu. Problem: oryginał jest w Javie i używa
+`BigInteger.toByteArray()`, które dokleja wiodące zero dla liczb dodatnich
+z ustawionym najstarszym bitem. Porty na inne języki robią to różnie i łatwo
+trafić w zły wariant.
+
+Ratunek: **pierwszy bajt skrótu musi równać się pierwszemu bajtowi kodu**.
+Dzięki temu poprawność obliczeń sprawdza się LOKALNIE, zanim cokolwiek poleci
+do urządzenia. Liczymy więc skrót dla wszystkich wariantów kodowania liczb
+i wybieramy ten, który przechodzi test — zamiast próbować kolejnych wersji
+na cudzym ekranie.
+
+Zadziałało za pierwszym razem, kod `DC0B1C`.
+
+## Podtrzymywanie połączenia
+
+Urządzenie wysyła okresowe pingi i **rozłącza, gdy zostaną bez odpowiedzi**.
+Samo wysyłanie klawiszy nie wystarcza — potrzebny jest wątek, który cały czas
+czyta ramki i odbija pingi. Bez niego połączenie padało po dwóch naciśnięciach.
+
+Nawet z wątkiem urządzenie zamyka bezczynne połączenie po ok. 30 sekundach.
+Nie jest to problem: `press()` odtwarza połączenie samo, co zostało sprawdzone
+(klawisz, 30 s przerwy, kolejne dwa klawisze — wszystkie doszły).
+
+## Klawisze
+
+37 kodów systemowych Androida: nawigacja, Home, Back, Menu, Szukaj, Asystent,
+przełącznik aplikacji, sterowanie odtwarzaniem, głośność, wyciszenie,
+zasilanie, cyfry, kanały, przewodnik.

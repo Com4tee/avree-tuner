@@ -1390,6 +1390,103 @@ function viewProjektor() {
   </div>`;
 }
 
+let ATV = null;
+let ATV_HOST = null;
+
+async function loadAtv() {
+  try { ATV = await api('/api/androidtv'); } catch (e) { ATV = null; }
+}
+
+function atvAct(host, action, extra) {
+  return api('/api/androidtv', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ host: host, action: action }, extra || {}))
+  }).catch((e) => { toast(e.message, false); throw e; });
+}
+
+function atvInfo(host) {
+  return ((ATV && ATV.devices) || []).find((d) => d.host === host) || null;
+}
+
+/* Panel pilota dla urządzenia z Androidem. Klawisze to kody systemowe
+   Androida, te same, którymi posługuje się prawdziwy pilot. */
+function atvRemote(host) {
+  const info = atvInfo(host);
+  const pairing = (ATV && ATV.pairing) || {};
+  const busy = pairing.waiting && pairing.host === host;
+
+  if (!info || !info.paired) {
+    return `
+    <div class="card warn" style="margin-top:12px">
+      <h3>PILOT ANDROID TV</h3>
+      ${busy ? `
+        <div style="font-size:12px;line-height:1.55;color:#c9a370">
+          Kod sparowania powinien być teraz na ekranie tego urządzenia.
+          Przepisz go poniżej — sześć znaków szesnastkowych.
+        </div>
+        <div style="display:flex;gap:7px;margin-top:11px">
+          <input type="text" id="atvcode" style="flex-grow:1;text-transform:uppercase"
+                 maxlength="6" placeholder="np. DC0B1C">
+          <button class="btn primary" data-atvcode="${esc(host)}">Zatwierdź</button>
+        </div>
+      ` : `
+        <div class="dim" style="font-size:12px;line-height:1.55;margin-bottom:11px">
+          Pilot działa osobnym protokołem niż Cast — trzeba raz sparować kodem
+          z ekranu. Cast daje głośność i odtwarzanie, pilot daje nawigację.
+        </div>
+        <button class="btn primary" data-atvpair="${esc(host)}">Sparuj pilota</button>
+        ${pairing.error && pairing.host === host
+          ? `<div class="red" style="font-size:11px;margin-top:9px">${esc(pairing.error)}</div>` : ''}
+      `}
+    </div>`;
+  }
+
+  const k = (name, label, style) =>
+    `<button class="btn" ${style ? 'style="' + style + '"' : ''}
+             data-atvkey="${esc(name)}" data-atvhost="${esc(host)}">${label}</button>`;
+
+  return `
+  <div class="card" style="margin-top:12px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <h3 style="margin:0">PILOT ANDROID TV</h3>
+      <div class="grow"></div>
+      <span class="faint" style="font-size:11px">
+        ${info.connected ? 'połączony' : 'połączy się przy pierwszym klawiszu'}
+      </span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 168px 1fr;gap:12px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${k('HOME', 'Home')}${k('MENU', 'Menu')}${k('ASSIST', 'Asystent')}
+      </div>
+      <div class="osd-pad" style="grid-template-columns:repeat(3,52px)">
+        <span></span>${k('DPAD_UP', '&#9650;')}<span></span>
+        ${k('DPAD_LEFT', '&#9664;')}
+        <button class="mid" data-atvkey="DPAD_CENTER" data-atvhost="${esc(host)}">OK</button>
+        ${k('DPAD_RIGHT', '&#9654;')}
+        <span></span>${k('DPAD_DOWN', '&#9660;')}<span></span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${k('BACK', 'Wstecz')}${k('SEARCH', 'Szukaj')}${k('APP_SWITCH', 'Aplikacje')}
+      </div>
+    </div>
+
+    <div style="display:flex;gap:6px;margin-top:13px;justify-content:center;flex-wrap:wrap">
+      ${k('MEDIA_REWIND', '&#9664;&#9664;')}
+      ${k('MEDIA_PLAY_PAUSE', '&#9654;&#10074;&#10074;')}
+      ${k('MEDIA_STOP', '&#9632;')}
+      ${k('MEDIA_FAST_FORWARD', '&#9654;&#9654;')}
+      ${k('VOLUME_DOWN', 'vol −')}${k('VOLUME_UP', 'vol +')}${k('MUTE', 'mute')}
+      ${k('POWER', 'power', 'border-color:#7a3230;color:#e8635a')}
+    </div>
+
+    <div class="faint" style="font-size:11px;margin-top:12px;line-height:1.5">
+      Urządzenie zamyka bezczynne połączenie po ok. 30 sekundach — aplikacja
+      odtwarza je sama przy następnym klawiszu, więc nie ma to znaczenia w użyciu.
+    </div>
+  </div>`;
+}
+
 /* ================= INNE URZĄDZENIA (Google Cast) ================= */
 
 let CAST = null;
@@ -1398,6 +1495,7 @@ let CAST_TARGET = null;
 
 async function loadCast() {
   try {
+    await loadAtv();
     CAST = await api('/api/cast');
     if (TAB === 'inne') { lastSignature = ''; render(); }
   } catch (e) { CAST = { devices: [], note: e.message }; }
@@ -1487,7 +1585,8 @@ function viewInne() {
                   data-caststop="${esc(d.host)}">zamknij</button>
         </div>` : ''}
       ` : `<div class="red" style="font-size:11px;margin-top:10px">${esc(d.error || 'nie odpowiada')}</div>`}
-    </div>`;
+    </div>
+    ${d.kind === 'telewizor' ? atvRemote(d.host) : ''}`;
   };
 
   const sections = order.filter((k) => groups[k]).map((kind) => `
@@ -1827,6 +1926,23 @@ function bind() {
     });
   view.querySelectorAll('[data-switch]').forEach((b) =>
     b.onclick = () => cmd('switch', b.dataset.value, { control: b.dataset.switch }));
+
+  // --- pilot Android TV
+  view.querySelectorAll('[data-atvkey]').forEach((b) =>
+    b.onclick = () => atvAct(b.dataset.atvhost, 'press', { value: b.dataset.atvkey })
+      .then(() => setTimeout(loadAtv, 400)));
+  view.querySelectorAll('[data-atvpair]').forEach((b) =>
+    b.onclick = () => atvAct(b.dataset.atvpair, 'pair_start')
+      .then(() => { toast('Kod powinien pojawić się na ekranie', true);
+                    setTimeout(() => { loadAtv().then(() => { lastSignature = ''; render(); }); }, 1500); }));
+  view.querySelectorAll('[data-atvcode]').forEach((b) =>
+    b.onclick = () => {
+      const code = ($('#atvcode').value || '').trim().toUpperCase();
+      if (code.length !== 6) { toast('Kod ma sześć znaków', false); return; }
+      atvAct(b.dataset.atvcode, 'pair_code', { code: code })
+        .then(() => { toast('Wysłano kod…', true);
+                      setTimeout(() => { loadAtv().then(() => { lastSignature = ''; render(); }); }, 4000); });
+    });
 
   // --- inne urządzenia Cast
   view.querySelectorAll('[data-castscan]').forEach((b) =>

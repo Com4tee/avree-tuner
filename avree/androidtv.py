@@ -349,59 +349,93 @@ def is_paired(host: str) -> bool:
 
 @dataclass
 class AndroidTv:
+    """Trwałe połączenie z pilotem.
+
+    Urządzenie wysyła okresowe pingi i ROZŁĄCZA, jeśli zostaną bez
+    odpowiedzi. Dlatego po uzgodnieniu musi działać wątek, który cały czas
+    czyta ramki i odbija pingi — samo wysyłanie klawiszy nie wystarcza.
+    Bez niego połączenie padało po dwóch naciśnięciach.
+    """
+
     host: str
     name: str = ""
     _link: FramedTls | None = field(default=None, repr=False)
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    _reader: threading.Thread | None = field(default=None, repr=False)
+    _running: bool = field(default=False, repr=False)
+    _ready: threading.Event = field(default_factory=threading.Event, repr=False)
+    _error: str | None = field(default=None, repr=False)
 
-    def connect(self) -> None:
+    def connect(self, timeout: float = 12.0) -> None:
         with self._lock:
-            link = FramedTls(self.host, REMOTE_PORT)
+            self.close()
+            link = FramedTls(self.host, REMOTE_PORT, timeout=30.0)
             link.connect()
             self._link = link
-            # Urządzenie zaczyna rozmowę: konfiguracja, potem prośba
-            # o uaktywnienie. Odpowiadamy na obie, inaczej rozłącza.
-            self._handshake()
+            self._error = None
+            self._ready.clear()
+            self._running = True
+            self._reader = threading.Thread(target=self._loop, daemon=True)
+            self._reader.start()
 
-    def _handshake(self) -> None:
-        for _ in range(6):
-            frame = self._link.recv()
-            fields = parse_fields(frame)
-            if 1 in fields:                       # remote_configure
-                info = (_tag_bytes(1, b"AVREE Tuner") + _tag_bytes(2, b"AVREE")
-                        + _tag_varint(3, 1) + _tag_bytes(4, b"1")
-                        + _tag_bytes(5, b"pl.avree.tuner") + _tag_bytes(6, b"1.0"))
-                self._link.send(_tag_bytes(1, _tag_varint(1, 1) + _tag_bytes(2, info)))
-                continue
-            if 2 in fields:                       # remote_set_active
-                self._link.send(_tag_bytes(2, _tag_varint(1, 622)))
-                return
-            if 8 in fields:                       # ping
-                self._pong(fields)
-                return
-        raise AndroidTvError("urządzenie nie dokończyło uzgadniania")
+        if not self._ready.wait(timeout):
+            self.close()
+            raise AndroidTvError(self._error or "urządzenie nie dokończyło uzgadniania")
 
-    def _pong(self, fields: dict) -> None:
-        inner = parse_fields(fields[8][0])
-        val = inner.get(1, [0])[0]
-        self._link.send(_tag_bytes(9, _tag_varint(1, val)))
+    def _loop(self) -> None:
+        """Czyta bez przerwy: uzgadnianie, potem odbijanie pingów."""
+        try:
+            while self._running and self._link:
+                frame = self._link.recv()
+                fields = parse_fields(frame)
+
+                if 1 in fields:                   # remote_configure
+                    info = (_tag_bytes(1, b"AVREE Tuner") + _tag_bytes(2, b"AVREE")
+                            + _tag_varint(3, 1) + _tag_bytes(4, b"1")
+                            + _tag_bytes(5, b"pl.avree.tuner") + _tag_bytes(6, b"1.0"))
+                    self._send(_tag_bytes(1, _tag_varint(1, 1) + _tag_bytes(2, info)))
+                elif 2 in fields:                 # remote_set_active
+                    self._send(_tag_bytes(2, _tag_varint(1, 622)))
+                    self._ready.set()
+                elif 8 in fields:                 # ping
+                    inner = parse_fields(fields[8][0])
+                    self._send(_tag_bytes(9, _tag_varint(1, inner.get(1, [0])[0])))
+                    self._ready.set()
+                elif 3 in fields:                 # remote_error
+                    self._error = "urządzenie zgłosiło błąd protokołu"
+        except Exception as e:                    # noqa: BLE001
+            if self._running:
+                self._error = f"{type(e).__name__}: {e}"
+        finally:
+            self._running = False
+            self._ready.set()
+
+    def _send(self, payload: bytes) -> None:
+        with self._lock:
+            if self._link:
+                self._link.send(payload)
 
     @property
     def connected(self) -> bool:
-        return self._link is not None and self._link.sock is not None
+        return self._running and self._link is not None and self._link.sock is not None
 
     def press(self, key: str) -> None:
         code = KEYS.get(key.upper())
         if code is None:
             raise AndroidTvError(f"nieznany klawisz: {key}")
-        with self._lock:
-            if not self.connected:
-                self.connect()
-            inject = _tag_varint(1, code) + _tag_varint(2, DIRECTION_SHORT)
-            self._link.send(_tag_bytes(10, inject))
+        if not self.connected:
+            self.connect()
+        inject = _tag_varint(1, code) + _tag_varint(2, DIRECTION_SHORT)
+        try:
+            self._send(_tag_bytes(10, inject))
+        except OSError as e:
+            self.close()
+            raise AndroidTvError(f"połączenie zerwane: {e}") from e
 
     def close(self) -> None:
         with self._lock:
+            self._running = False
             if self._link:
                 self._link.close()
             self._link = None
+            self._reader = None
