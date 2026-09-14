@@ -20,6 +20,9 @@ from typing import Any
 from . import cast, discovery, eq, projector as projector_mod, upnp, webos
 from .avr import (
     CROSSOVER_FREQS,
+    OSD_KEYS,
+    TONE_CONTROLS,
+    TONE_SWITCHES,
     MODE_CATEGORIES,
     SPEAKER_POSITIONS,
     SPEAKER_SIZES,
@@ -166,6 +169,9 @@ class Handler(BaseHTTPRequestHandler):
         state["crossover_freqs"] = CROSSOVER_FREQS
         state["speaker_positions"] = SPEAKER_POSITIONS
         state["tips"] = TIPS
+        state["tone_controls"] = TONE_CONTROLS
+        state["tone_switches"] = TONE_SWITCHES
+        state["osd_keys"] = sorted(OSD_KEYS)
         state["now_playing"] = self.app.now_playing
         return state
 
@@ -326,6 +332,12 @@ class Handler(BaseHTTPRequestHandler):
                 avr.send("PSGEQ ON")
             else:
                 avr.send("PSGEQ OFF")
+
+        # --- barwa i parametry dźwięku
+        elif action == "tone":
+            return avr.set_tone(str(body.get("control")), float(value))
+        elif action == "switch":
+            return avr.set_switch(str(body.get("control")), str(value))
 
         # --- menu ekranowe (jedyna droga do uruchomienia kalibracji Audyssey)
         elif action == "osd":

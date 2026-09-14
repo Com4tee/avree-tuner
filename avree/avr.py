@@ -58,6 +58,50 @@ OSD_KEYS = {
     "info": "MNINF", "options": "MNOPT",
 }
 
+# Regulacje barwy i dynamiki. Każda pozycja: komenda, zakres, opis.
+# Skala Denona dla wartości liczbowych: 50 = 0, krok 0.5 przy zapisie
+# trzycyfrowym - ta sama co przy poziomach kanałów.
+TONE_CONTROLS = {
+    # `requires` - przełącznik, bez którego amplituner IGNORUJE komendę.
+    # Ustalone pomiarowo: przy PSTONE CTRL OFF komenda PSBAS nie daje echa
+    # ani skutku. To jest dokładnie to zachowanie, które w aplikacji Denona
+    # wygląda jak zepsuty suwak.
+    "bass":      {"cmd": "PSBAS",  "min": -6,  "max": 6,  "step": 0.5,
+                  "label": "Bas", "unit": "dB", "scale": "level",
+                  "requires": "tone_control"},
+    "treble":    {"cmd": "PSTRE",  "min": -6,  "max": 6,  "step": 0.5,
+                  "label": "Sopran", "unit": "dB", "scale": "level",
+                  "requires": "tone_control"},
+    "dialog":    {"cmd": "PSDIL",  "min": -12, "max": 12, "step": 0.5,
+                  "label": "Poziom dialogu", "unit": "dB", "scale": "level"},
+    "subwoofer": {"cmd": "PSSWL",  "min": -12, "max": 12, "step": 0.5,
+                  "label": "Poziom subwoofera", "unit": "dB", "scale": "level"},
+    "lfe":       {"cmd": "PSLFE",  "min": -10, "max": 0,  "step": 1,
+                  "label": "Poziom LFE", "unit": "dB", "scale": "lfe"},
+    "dialog_ctl":{"cmd": "PSDIC",  "min": 0,   "max": 6,  "step": 1,
+                  "label": "Dialog Control", "unit": "", "scale": "int"},
+    "effect":    {"cmd": "PSEFF",  "min": 1,   "max": 15, "step": 1,
+                  "label": "Poziom efektu", "unit": "", "scale": "int"},
+}
+
+# Przełączniki dwustanowe i wyliczeniowe.
+TONE_SWITCHES = {
+    "tone_control": {"cmd": "PSTONE CTRL", "values": ["ON", "OFF"],
+                     "label": "Regulacja barwy"},
+    # Cinema EQ jest ignorowane w trybie Stereo - sprawdzone.
+    "cinema_eq":    {"cmd": "PSCINEMA EQ.", "values": ["ON", "OFF"],
+                     "label": "Cinema EQ",
+                     "note": "niedostępne w trybie Stereo i Direct"},
+    "loudness":     {"cmd": "PSLOM", "values": ["ON", "OFF"],
+                     "label": "Loudness Management"},
+    "neural":       {"cmd": "PSNEURAL", "values": ["ON", "OFF"],
+                     "label": "DTS Neural:X"},
+    "drc":          {"cmd": "PSDRC", "values": ["AUTO", "LOW", "MID", "HI", "OFF"],
+                     "label": "Kompresja dynamiki"},
+    "room_size":    {"cmd": "PSRSZ", "values": ["S", "MS", "M", "ML", "L"],
+                     "label": "Rozmiar pomieszczenia"},
+}
+
 # Kod z SSINFAISSIG -> co faktycznie przyszło na wejście.
 INPUT_SIGNAL = {
     "01": "Analogowy", "02": "PCM", "03": "Dolby Digital", "04": "DTS",
@@ -119,6 +163,8 @@ class Avr:
             "reference_level": None, "graphic_eq": None, "cinema_eq": None,
             "loudness_management": None, "dialog_control": None,
             "room_size": None, "neural": None, "effect_level": None,
+            "bass": None, "treble": None, "dialog": None, "lfe": None,
+            "tone_control": None, "drc_value": None,
             "channel_levels": {}, "setup_levels": {}, "sub_levels": {},
             "speakers": {}, "crossovers": {},
             "subwoofer_mode": None, "lfe_lowpass": None, "crossover_mode": None,
@@ -251,6 +297,23 @@ class Avr:
             s["neural"] = line[9:].strip() == "ON"
         elif line.startswith("PSEFF "):
             s["effect_level"] = line[6:].strip()
+        elif line.startswith("PSBAS "):
+            s["bass"] = parse_level(line[6:])
+        elif line.startswith("PSTRE "):
+            s["treble"] = parse_level(line[6:])
+        elif line.startswith("PSDIL "):
+            v = parse_level(line[6:])
+            if v is not None:
+                s["dialog"] = v
+        elif line.startswith("PSLFE "):
+            raw = line[6:].strip()
+            s["lfe"] = -int(raw) if raw.isdigit() else None
+        elif line.startswith("PSTONE CTRL "):
+            s["tone_control"] = line[12:].strip() == "ON"
+        elif line.startswith("PSDRC "):
+            # PSDRC niesie wartość wyliczeniową (AUTO/LOW/MID/HI/OFF),
+            # a nie przełącznik - trzymamy ją osobno od starego pola.
+            s["drc_value"] = line[6:].strip()
 
         # --- poziomy kanałów (CV = bieżące, SSLEV = z konfiguracji)
         elif line.startswith("CV") and line != "CVEND":
@@ -475,6 +538,44 @@ class Avr:
 
     def set_subwoofer(self, on: bool) -> None:
         self.send("PSSWR " + ("ON" if on else "OFF"))
+
+    def set_tone(self, name: str, value: float) -> dict[str, Any]:
+        """Regulacja liczbowa. Kodowanie zależy od rodzaju parametru.
+
+        Jeśli parametr wymaga włączonego przełącznika, włączamy go po drodze
+        i mówimy o tym w wyniku. Inaczej suwak wyglądałby na zepsuty.
+        """
+        spec = TONE_CONTROLS.get(name)
+        if spec is None:
+            raise ValueError(f"nieznana regulacja: {name}")
+
+        note = None
+        needed = spec.get("requires")
+        if needed and not self._state.get(needed):
+            self.set_switch(needed, "ON")
+            time.sleep(0.25)
+            note = (f"włączono „{TONE_SWITCHES[needed]['label']}” — "
+                    "bez tego amplituner ignoruje tę regulację")
+        value = max(spec["min"], min(spec["max"], float(value)))
+        if spec["scale"] == "level":
+            code = format_mv(round((value + 50.0) * 2) / 2.0)
+        elif spec["scale"] == "lfe":
+            # LFE liczy się od zera w dół, dwucyfrowo: 00 to 0 dB, 10 to -10 dB.
+            code = f"{abs(int(round(value))):02d}"
+        else:
+            code = f"{int(round(value)):02d}"
+        self.send(f"{spec['cmd']} {code}")
+        return {"ok": True, "note": note}
+
+    def set_switch(self, name: str, value: str) -> dict[str, Any]:
+        spec = TONE_SWITCHES.get(name)
+        if spec is None:
+            raise ValueError(f"nieznany przełącznik: {name}")
+        value = str(value).upper()
+        if value not in spec["values"]:
+            raise ValueError(f"{name}: dozwolone {spec['values']}")
+        self.send(f"{spec['cmd']} {value}")
+        return {"ok": True, "note": spec.get("note")}
 
     def _reread(self, query: str) -> None:
         """Po zmianie ustawienia dopytuje urządzenie, nie zgaduje wyniku."""

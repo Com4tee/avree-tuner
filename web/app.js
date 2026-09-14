@@ -184,6 +184,7 @@ function render() {
     else if (TAB === 'audyssey') view.innerHTML = viewAudyssey();
     else if (TAB === 'glosniki') view.innerHTML = viewGlosniki();
     else if (TAB === 'konfiguracja') view.innerHTML = viewKonfiguracja();
+    else if (TAB === 'dzwiek') view.innerHTML = viewDzwiek();
     else if (TAB === 'equalizer') view.innerHTML = viewEqualizer();
     else if (TAB === 'pomiar') view.innerHTML = viewPomiar();
     else if (TAB === 'projektor') view.innerHTML = viewProjektor();
@@ -1567,6 +1568,130 @@ function viewInne() {
   </div>`;
 }
 
+/* ================= DŹWIĘK I PILOT AMPLITUNERA ================= */
+
+function viewDzwiek() {
+  const s = STATE;
+  const controls = s.tone_controls || {};
+  const switches = s.tone_switches || {};
+
+  const slider = (key, spec) => {
+    const value = s[key] != null ? s[key] : (s[key.replace('_ctl', '_control')] ?? null);
+    const has = value != null && value !== '';
+    return `
+    <div class="setup-row" style="grid-template-columns:170px 1fr 92px">
+      <div style="font-size:12px">${esc(spec.label)}</div>
+      <div style="display:flex;gap:5px;align-items:center">
+        <button class="btn" style="padding:4px 10px" data-tone="${esc(key)}" data-delta="${-spec.step}">−</button>
+        <div class="vol-bar" style="flex-grow:1">
+          <i style="width:${has ? Math.round(((value - spec.min) / (spec.max - spec.min)) * 100) : 0}%"></i>
+        </div>
+        <button class="btn" style="padding:4px 10px" data-tone="${esc(key)}" data-delta="${spec.step}">+</button>
+      </div>
+      <div class="mono" style="font-size:12px;text-align:right">
+        ${has ? (value > 0 ? '+' : '') + Number(value).toFixed(spec.step < 1 ? 1 : 0) : '—'}
+        <span class="faint">${esc(spec.unit || '')}</span>
+      </div>
+    </div>`;
+  };
+
+  const STATE_KEY = {
+    tone_control: 'tone_control', cinema_eq: 'cinema_eq',
+    loudness: 'loudness_management', neural: 'neural',
+    drc: 'drc_value', room_size: 'room_size',
+  };
+
+  const toggle = (key, spec) => {
+    const current = s[STATE_KEY[key] || key];
+    const asText = typeof current === 'boolean' ? (current ? 'ON' : 'OFF') : String(current ?? '');
+    return `
+    <div class="setup-row" style="grid-template-columns:170px 1fr">
+      <div style="font-size:12px">${esc(spec.label)}</div>
+      <div class="seg">
+        ${spec.values.map((v) =>
+          `<button class="${asText === v ? 'on' : ''}" data-switch="${esc(key)}"
+                   data-value="${esc(v)}">${esc(v)}</button>`).join('')}
+      </div>
+    </div>`;
+  };
+
+  return `
+  <div class="grid" style="grid-template-columns:1fr 340px">
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <div class="card">
+        <h3>BARWA I POZIOMY</h3>
+        ${Object.keys(controls).map((k) => slider(k, controls[k])).join('')}
+        <div class="faint" style="font-size:11px;margin-top:12px;line-height:1.5">
+          Regulacja barwy działa tylko przy włączonym przełączniku poniżej, i nie działa
+          w trybach Direct i Pure Direct — one omijają tę część toru.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>PRZETWARZANIE</h3>
+        ${Object.keys(switches).map((k) => toggle(k, switches[k])).join('')}
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="card">
+        <h3>PILOT AMPLITUNERA</h3>
+        <div class="dim" style="font-size:11px;margin-top:-6px;margin-bottom:13px;line-height:1.5">
+          Nawigacja po menu ekranowym amplitunera. Menu wychodzi przez HDMI MONITOR,
+          więc rzutnik musi być włączony i przełączony na to wejście.
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:12px">
+          <button class="btn primary" style="flex-grow:1" data-osd="menu_on">Otwórz menu</button>
+          <button class="btn" style="flex-grow:1" data-osd="menu_off">Zamknij</button>
+        </div>
+        <div class="osd-pad">
+          <span></span><button data-osd="up">&#9650;</button><span></span>
+          <button data-osd="left">&#9664;</button>
+          <button class="mid" data-osd="enter">OK</button>
+          <button data-osd="right">&#9654;</button>
+          <span></span><button data-osd="down">&#9660;</button>
+          <button data-osd="back" style="font-size:11px">Wróć</button>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:12px">
+          <button class="btn" style="flex-grow:1" data-osd="info">Info</button>
+          <button class="btn" style="flex-grow:1" data-osd="options">Opcje</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>GŁOŚNOŚĆ I ŹRÓDŁO</h3>
+        <div style="display:flex;align-items:baseline;gap:7px">
+          <span class="mono" style="font-size:30px;font-weight:500">${s.volume_db == null ? '—' : dB(s.volume_db)}</span>
+          <span class="dim" style="font-size:13px">dB</span>
+          <div class="grow"></div>
+          <button class="btn ${s.mute ? 'danger' : ''}" data-act="mute">${s.mute ? 'Wyciszony' : 'Mute'}</button>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:12px">
+          <button class="btn" style="flex-grow:1" data-vol="-5">−5</button>
+          <button class="btn" style="flex-grow:1" data-vol="-1">−1</button>
+          <button class="btn" style="flex-grow:1" data-vol="1">+1</button>
+          <button class="btn" style="flex-grow:1" data-vol="5">+5</button>
+        </div>
+        <div class="mono faint" style="font-size:11px;margin-top:12px">
+          ${esc(s.source || '—')} · ${esc(s.surround || '—')}
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>CZEGO NIE DA SIĘ USTAWIĆ PO SIECI</h3>
+        <div class="faint" style="font-size:11px;line-height:1.6">
+          Equalizer graficzny amplitunera ma przełącznik, ale wartości jego dziewięciu
+          pasm <b>nie są adresowalne</b> — przetestowałem pięć składni, wszystkie milczą.
+          Edytuje się je wyłącznie w menu ekranowym, do którego służy pad obok.<br><br>
+          Odległości głośników też nie wychodzą po telnecie
+          (<span class="mono">SSDST</span> milczy).
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ---------- widok: Konsola ---------- */
 
 let LOG = [];
@@ -1710,6 +1835,19 @@ function bind() {
     b.onclick = () => cmd('subwoofer', b.dataset.swr === '1'));
   view.querySelectorAll('[data-osd]').forEach((b) =>
     b.onclick = () => cmd('osd', b.dataset.osd));
+  // --- barwa amplitunera
+  view.querySelectorAll('[data-tone]').forEach((b) =>
+    b.onclick = () => {
+      const key = b.dataset.tone;
+      const spec = (STATE.tone_controls || {})[key];
+      if (!spec) return;
+      const current = STATE[key];
+      if (current == null) { toast('Nie znam jeszcze wartości — odśwież stan', false); return; }
+      cmd('tone', Number(current) + parseFloat(b.dataset.delta), { control: key });
+    });
+  view.querySelectorAll('[data-switch]').forEach((b) =>
+    b.onclick = () => cmd('switch', b.dataset.value, { control: b.dataset.switch }));
+
   // --- inne urządzenia Cast
   view.querySelectorAll('[data-castscan]').forEach((b) =>
     b.onclick = () => api('/api/cast', {
