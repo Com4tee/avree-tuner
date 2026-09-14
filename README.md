@@ -76,3 +76,49 @@ python tools/mapper.py <ip>          # mapowanie nieudokumentowanych komend
 - Amplituner przyjmuje **jedno połączenie telnet naraz**.
 - X3300W (rocznik 2016) **nie ma** `Save & Load` na USB — obecnej kalibracji nie da się
   pobrać z urządzenia żadną drogą.
+
+
+## Przeniesienie na inny komputer
+
+Parowania i klucze **nie są w repozytorium** — leżą w
+`%APPDATA%vree-tuner\`:
+
+| Plik | Co trzyma |
+|---|---|
+| `webos-keys.json` | klucze klienta do rzutnika i telewizora LG |
+| `androidtv-cert.pem`, `androidtv-key.pem` | certyfikat klienta do Google TV |
+| `androidtv-paired.json` | które urządzenia Android TV są sparowane |
+| `config.json` | adresy, nazwy, MAC-i, blokada auto-wyłączania |
+| `eq.json` | projekt korekcji |
+
+**Skopiowanie tego katalogu na inny komputer przenosi wszystkie parowania.**
+Bez tego trzeba sparować od nowa: rzutnik, telewizor i Google TV — każde
+z potwierdzeniem na ekranie.
+
+Uwaga do certyfikatu Android TV: parowanie jest z nim związane. Wygenerowanie
+nowego (czyli skasowanie plików `.pem`) unieważnia poprzednie parowanie.
+
+Uwaga do webOS: klucz klienta jest wiązany z ADRESEM, nie z urządzeniem.
+Nowy adres z DHCP wymaga ponownego parowania — warto zarezerwować adresy
+na routerze.
+
+## Do zweryfikowania w następnej sesji
+
+Trzy piloty wysyłają komunikaty bez błędu i utrzymują połączenie, ale
+**skutku wizualnego nie potwierdzono** — testy szły ze stacjonarnego
+w innym pokoju niż ekrany.
+
+- [ ] Rzutnik `192.168.0.75` — wysłane INFO i BACK
+- [ ] Telewizor `192.168.0.17` — wysłane INFO, BACK i napis na ekranie
+- [ ] Google TV `192.168.0.58` — wysłane HOME, strzałki w czterech kierunkach
+- [ ] Blokada auto-wyłączania — potwierdzenia wymaga dopiero dłuższy seans
+
+Jeśli któryś pilot nie rusza niczym na ekranie, do poprawy są numery pól
+w komunikacie wstrzykującym klawisz.
+
+## Znane usterki
+
+- `correctable_mask` i `minimum_phase` w `avree/measure.py` **nie działają** —
+  zwracają 100% korygowalnego pasma niezależnie od obecności odbicia.
+  Oznaczone ostrzeżeniami w kodzie i flagą `correctable_verified: False`.
+  Reszta silnika pomiarowego jest zweryfikowana liczbowo.

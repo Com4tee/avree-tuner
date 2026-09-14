@@ -34,6 +34,36 @@ def load_settings() -> dict:
         return {}
 
 
+def device_settings(host: str) -> dict:
+    """Ustawienia JEDNEGO urządzenia, trzymane pod jego adresem.
+
+    Wcześniej wszystko szło do wspólnych kluczy `projector_*` i urządzenia
+    nadpisywały sobie nawzajem MAC oraz blokadę auto-wyłączania — rzutnik
+    dostał MAC telewizora, więc Wake-on-LAN poszedłby pod zły adres.
+    """
+    for entry in load_settings().get("webos_devices", []):
+        if entry.get("host") == host:
+            return entry
+    return {}
+
+
+def save_device_setting(host: str, key: str, value: Any) -> None:
+    cfg = load_settings()
+    devices = cfg.get("webos_devices", [])
+    entry = next((d for d in devices if d.get("host") == host), None)
+    if entry is None:
+        entry = {"host": host}
+        devices.append(entry)
+    entry[key] = value
+    cfg["webos_devices"] = devices
+    try:
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CONFIG_PATH.write_text(json.dumps(cfg, indent=2, ensure_ascii=False),
+                               encoding="utf-8")
+    except OSError:
+        pass
+
+
 def save_setting(key: str, value: Any) -> None:
     cfg = load_settings()
     cfg[key] = value
@@ -50,10 +80,14 @@ class Projector:
 
     def __init__(self, host: str | None = None, mac: str | None = None) -> None:
         cfg = load_settings()
+        # Z jawnym adresem czytamy ustawienia TEGO urządzenia. Bez adresu
+        # wracamy do starych, wspólnych kluczy - dla zgodności z zapisem
+        # sprzed obsługi wielu urządzeń.
         self.host = host or cfg.get("projector_host")
-        self.mac = mac or cfg.get("projector_mac")
-        self.name = cfg.get("projector_name", "")
-        self.model = cfg.get("projector_model", "")
+        own = device_settings(self.host) if self.host else {}
+        self.mac = mac or own.get("mac") or (None if host else cfg.get("projector_mac"))
+        self.name = own.get("name") or ("" if host else cfg.get("projector_name", ""))
+        self.model = own.get("model") or ("" if host else cfg.get("projector_model", ""))
         self._dev: webos.WebOsDevice | None = None
         self._lock = threading.RLock()
         self._cache: dict[str, Any] = {}
@@ -62,8 +96,10 @@ class Projector:
         self.pairing = False
         self._failed_at: float = 0.0
         # Podtrzymywanie aktywności - patrz keep_awake().
-        self.keep_awake_on = bool(cfg.get("projector_keep_awake", False))
-        self.keep_awake_minutes = int(cfg.get("projector_keep_awake_minutes", 30))
+        self.keep_awake_on = bool(own.get("keep_awake",
+                                  cfg.get("projector_keep_awake", False) if not host else False))
+        self.keep_awake_minutes = int(own.get("keep_awake_minutes",
+                                      cfg.get("projector_keep_awake_minutes", 30)))
         self.keep_awake_last: float | None = None
         self._awake_stop = threading.Event()
         self._awake_thread: threading.Thread | None = None
@@ -243,9 +279,10 @@ class Projector:
         with self._lock:
             if minutes:
                 self.keep_awake_minutes = max(5, min(120, int(minutes)))
-                save_setting("projector_keep_awake_minutes", self.keep_awake_minutes)
+                save_device_setting(self.host, "keep_awake_minutes",
+                                    self.keep_awake_minutes)
             self.keep_awake_on = bool(on)
-            save_setting("projector_keep_awake", self.keep_awake_on)
+            save_device_setting(self.host, "keep_awake", self.keep_awake_on)
             if on:
                 self._start_keep_awake()
             else:
@@ -291,7 +328,7 @@ class Projector:
                       out)
         if m:
             self.mac = m.group(1).lower().replace("-", ":")
-            save_setting("projector_mac", self.mac)
+            save_device_setting(self.host, "mac", self.mac)
             return self.mac
         return None
 
