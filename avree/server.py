@@ -71,6 +71,7 @@ class App:
         self.scan: dict[str, Any] = {"running": False, "found": [], "note": ""}
         self.eq = eq.load()
         self.projector = projector_mod.Projector()
+        self.webos = projector_mod.WebOsHub()
         self.projector_scan = {"running": False, "found": [], "note": ""}
         self.cast = cast.CastHub()
 
@@ -156,6 +157,11 @@ class Handler(BaseHTTPRequestHandler):
             self._json(self.app.projector_scan)
         elif route == "/api/cast":
             self._json(self._cast_payload())
+        elif route == "/api/webos":
+            self._json({"devices": self.app.webos.overview(),
+                        "note": self.app.webos.scan_note,
+                        "scanning": self.app.webos.scanning,
+                        "buttons": webos.PointerInput.BUTTONS})
         elif route.startswith("/media/"):
             self._serve_media(route[len("/media/"):])
         else:
@@ -259,6 +265,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(self._projector_scan())
             elif route == "/api/cast":
                 self._json(self._cast_action(body))
+            elif route == "/api/webos":
+                self._json(self._webos_action(body))
             else:
                 self.send_error(404)
         except (DenonTelnetError, upnp.UpnpError, ValueError) as e:
@@ -388,6 +396,37 @@ class Handler(BaseHTTPRequestHandler):
             "size": path.stat().st_size, "url": url,
         }
         return {"ok": True, "now_playing": self.app.now_playing}
+
+    # ---- urządzenia webOS (rzutnik i telewizor) ------------------------
+
+    def _webos_action(self, body: dict[str, Any]) -> dict[str, Any]:
+        hub = self.app.webos
+        action = str(body.get("action") or "")
+
+        if action == "scan":
+            if hub.scanning:
+                return {"ok": True, "already": True}
+            threading.Thread(target=hub.scan, daemon=True).start()
+            return {"ok": True}
+        if action == "adopt":
+            hub.adopt(str(body.get("host") or ""), str(body.get("name") or ""),
+                      str(body.get("model") or ""))
+            return {"ok": True}
+        if action == "forget":
+            hub.forget(str(body.get("host") or ""))
+            return {"ok": True}
+
+        host = str(body.get("host") or "")
+        try:
+            if action == "keep_awake":
+                device = hub.devices.get(host)
+                if device is None:
+                    raise webos.WebOsError(f"nie znam urządzenia {host}")
+                return device.set_keep_awake(bool(body.get("value")),
+                                             body.get("minutes"))
+            return hub.act(host, action, body.get("value"))
+        except webos.WebOsError as e:
+            raise ValueError(str(e)) from e
 
     # ---- urządzenia Google Cast ----------------------------------------
 

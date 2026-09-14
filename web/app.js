@@ -1138,79 +1138,95 @@ function viewPomiar() {
 
 /* ================= RZUTNIK ================= */
 
-let PROJ = null;
-let projTimer = null;
+let WEBOS = null;
+let WEBOS_HOST = null;
+let projTimer = 0;
 
 async function loadProjector(force) {
   try {
-    PROJ = await api('/api/projector');
+    WEBOS = await api('/api/webos');
+    const list = WEBOS.devices || [];
+    // Domyślnie pokazujemy pierwsze urządzenie, które odpowiada.
+    if (!WEBOS_HOST || !list.some((d) => d.host === WEBOS_HOST)) {
+      const live = list.find((d) => d.connected) || list[0];
+      WEBOS_HOST = live ? live.host : null;
+    }
     if (TAB === 'projektor') { lastSignature = ''; render(); }
-  } catch (e) { PROJ = { error: e.message }; }
+  } catch (e) { WEBOS = { devices: [], note: e.message }; }
 }
 
-function projAct(action, value) {
-  return api('/api/projector', {
+function currentWebos() {
+  return ((WEBOS && WEBOS.devices) || []).find((d) => d.host === WEBOS_HOST) || null;
+}
+
+function webosAct(action, value, extra) {
+  return api('/api/webos', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: action, value: value })
-  }).then(() => setTimeout(() => loadProjector(true), 600))
-    .catch((e) => toast(e.message, false));
+    body: JSON.stringify(Object.assign({ host: WEBOS_HOST, action: action, value: value }, extra || {}))
+  }).then((r) => { setTimeout(() => loadProjector(true), 600); return r; })
+    .catch((e) => { toast(e.message, false); throw e; });
 }
 
 async function projScan() {
   try {
-    await api('/api/projector/scan', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    await api('/api/webos', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'scan' }) });
+    toast('Szukam urządzeń webOS…', true);
   } catch (e) { toast(e.message, false); return; }
   const t = setInterval(async () => {
     try {
-      const r = await api('/api/projector/scan');
-      if (PROJ) PROJ.scan = r;
-      const n = $('#projscannote');
-      if (n) n.textContent = r.note || '';
-      if (!r.running) { clearInterval(t); lastSignature = ''; render(); }
+      const r = await api('/api/webos');
+      WEBOS = r;
+      if (!r.scanning) { clearInterval(t); lastSignature = ''; render(); toast(r.note || '', true); }
     } catch (e) { clearInterval(t); }
-  }, 800);
+  }, 900);
 }
 
 function viewProjektor() {
-  if (!PROJ) { setTimeout(loadProjector, 0);
-    return '<div class="card"><h3>RZUTNIK</h3><div class="dim">łączę…</div></div>'; }
+  if (!WEBOS) { setTimeout(loadProjector, 0);
+    return '<div class="card"><h3>EKRANY</h3><div class="dim">szukam…</div></div>'; }
 
-  const p = PROJ;
-  const scan = p.scan || {};
-
-  // Bez wskazanego urządzenia pokazujemy samo wyszukiwanie.
-  if (!p.host) {
+  const list = WEBOS.devices || [];
+  if (!list.length) {
     return `
     <div class="card">
-      <h3>WSKAŻ RZUTNIK</h3>
-      <div class="dim" style="font-size:12px;margin-bottom:12px">
-        Szukam urządzeń z otwartym portem SSAP. Kryterium jest funkcja, nie producent —
-        po adresie MAC łatwo trafić w niewłaściwe urządzenie LG.
+      <h3>URZĄDZENIA webOS</h3>
+      <div class="dim" style="font-size:12px;margin-bottom:12px;line-height:1.55">
+        Rzutnik i telewizor LG. Kryterium wyszukiwania to otwarty port SSAP,
+        a nie producent — po adresie MAC łatwo trafić w niewłaściwe urządzenie.
       </div>
-      <button class="btn primary" data-projscan="1">Szukaj urządzeń webOS</button>
-      <span class="faint" style="font-size:11px;margin-left:10px" id="projscannote">${esc(scan.note || '')}</span>
-      ${(scan.found || []).length ? `<div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">
-        ${scan.found.map((d) => `<button class="pill" data-projuse="${esc(d.host)}"
-            data-name="${esc(d.name)}" data-model="${esc(d.model)}">
-          <span class="mono">${esc(d.host)}</span>
-          <span style="margin-left:10px">${esc(d.name || '(bez nazwy)')}</span>
-          <span class="faint" style="margin-left:8px;font-size:11px">${esc(d.model || 'model nieustalony')}</span>
-        </button>`).join('')}
-      </div>` : ''}
+      <button class="btn primary" data-projscan="1">Szukaj urządzeń</button>
+      <span class="faint" style="font-size:11px;margin-left:10px">${esc(WEBOS.note || '')}</span>
     </div>`;
   }
 
+  const p = currentWebos();
+  const tabs = `
+  <div style="display:flex;align-items:center;gap:8px">
+    <div class="seg">
+      ${list.map((d) => `<button class="${d.host === WEBOS_HOST ? 'on' : ''}"
+          data-webosdev="${esc(d.host)}">
+        ${esc(d.name || d.host)}
+        <span style="opacity:.6;margin-left:6px">${d.connected ? '●' : '○'}</span>
+      </button>`).join('')}
+    </div>
+    <div class="grow"></div>
+    <span class="faint" style="font-size:11px">${esc(WEBOS.note || '')}</span>
+    <button class="btn" data-projscan="1">Szukaj ponownie</button>
+  </div>`;
+
+  if (!p) return tabs;
+
   const on = p.power === 'Active';
   const fg = p.foreground || '';
-  // webOS nazywa aktywne wejście identyfikatorem aplikacji: com.webos.app.hdmi1
   const fgInput = (fg.match(/hdmi(\d)/i) || [])[1];
 
-  return `
+  return tabs + `
   ${p.error ? `<div class="banner bad"><div class="grow">
-      <div class="t">Rzutnik nie odpowiada</div>
-      <div class="d">${esc(p.error)}${p.paired ? '' :
-        ' — urządzenie nie jest jeszcze sparowane. Po kliknięciu akcji pojawi się pytanie na ekranie.'}</div>
+      <div class="t">${esc(p.name || p.host)} nie odpowiada</div>
+      <div class="d">${esc(p.error)}${p.paired ? ' — urządzenie jest sparowane, ale teraz niedostępne (wyłączone albo zmieniło adres).'
+        : ' — nie jest jeszcze sparowane. Po kliknięciu akcji pojawi się pytanie na ekranie.'}</div>
     </div></div>` : ''}
 
   <div class="grid" style="grid-template-columns:1fr 360px">
@@ -1220,7 +1236,7 @@ function viewProjektor() {
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
           <span class="dot ${on ? 'on' : 'off'}"></span>
           <div>
-            <div style="font-size:14px;font-weight:600">${esc(p.name || 'Rzutnik')}</div>
+            <div style="font-size:14px;font-weight:600">${esc(p.name || 'Urządzenie')}</div>
             <div class="mono faint" style="font-size:11px;margin-top:2px">
               ${esc(p.model || '')} · ${esc(p.host)}${p.mac ? ' · ' + esc(p.mac) : ''}
             </div>
@@ -1231,23 +1247,18 @@ function viewProjektor() {
         <div style="display:flex;gap:7px;flex-wrap:wrap">
           <button class="btn" data-projact="wake">Obudź (WoL)</button>
           <button class="btn danger" data-projact="power_off">Wyłącz</button>
-          <button class="btn" data-projact="toast">Wyślij napis na ekran</button>
+          <button class="btn" data-projact="toast">Napis na ekran</button>
           <div class="grow"></div>
           <button class="btn" data-projrefresh="1">Odśwież</button>
-        </div>
-        <div class="faint" style="font-size:11px;margin-top:11px;line-height:1.5">
-          SSAP wyłącza, ale nie włącza — w czuwaniu webOS zwija interfejs sieciowy.
-          Do budzenia służy Wake-on-LAN, o ile w menu rzutnika włączone jest budzenie przez sieć.
         </div>
       </div>
 
       <div class="card">
         <h3>PILOT</h3>
         <div class="dim" style="font-size:11px;margin-top:-6px;margin-bottom:13px;line-height:1.5">
-          Zdarzenia idą po sieci, nie podczerwienią — działa zza ściany.
-          Strzałki na klawiaturze też sterują, gdy ta zakładka jest otwarta.
+          Zdarzenia idą po sieci, nie podczerwienią. Strzałki na klawiaturze też
+          sterują, gdy ta zakładka jest otwarta.
         </div>
-
         <div style="display:grid;grid-template-columns:1fr 168px 1fr;gap:14px;align-items:start">
           <div style="display:flex;flex-direction:column;gap:6px">
             <button class="btn" data-key="HOME">Home</button>
@@ -1255,7 +1266,6 @@ function viewProjektor() {
             <button class="btn" data-key="SETTINGS">Ustawienia</button>
             <button class="btn" data-key="INFO">Info</button>
           </div>
-
           <div class="osd-pad" style="grid-template-columns:repeat(3,52px)">
             <span></span><button data-key="UP">&#9650;</button><span></span>
             <button data-key="LEFT">&#9664;</button>
@@ -1263,7 +1273,6 @@ function viewProjektor() {
             <button data-key="RIGHT">&#9654;</button>
             <span></span><button data-key="DOWN">&#9660;</button><span></span>
           </div>
-
           <div style="display:flex;flex-direction:column;gap:6px">
             <button class="btn" data-key="BACK">Wstecz</button>
             <button class="btn" data-key="EXIT">Wyjście</button>
@@ -1271,7 +1280,6 @@ function viewProjektor() {
             <button class="btn" data-key="LIST">Lista</button>
           </div>
         </div>
-
         <div style="display:flex;gap:6px;margin-top:14px;justify-content:center">
           <button class="btn" data-key="REWIND">&#9664;&#9664;</button>
           <button class="btn" data-key="PLAY">&#9654;</button>
@@ -1279,7 +1287,6 @@ function viewProjektor() {
           <button class="btn" data-key="STOP">&#9632;</button>
           <button class="btn" data-key="FASTFORWARD">&#9654;&#9654;</button>
         </div>
-
         <div style="display:flex;gap:6px;margin-top:8px;justify-content:center">
           <button class="btn" style="border-color:#7a3230;color:#e8635a" data-key="RED">czerwony</button>
           <button class="btn" style="border-color:#2d5a30;color:#5fb862" data-key="GREEN">zielony</button>
@@ -1288,54 +1295,17 @@ function viewProjektor() {
         </div>
       </div>
 
-      <div class="card ${p.keep_awake ? '' : 'warn'}">
-        <div style="display:flex;align-items:center;gap:12px">
-          <div class="grow">
-            <div style="font-size:13px;font-weight:600">Blokada auto-wyłączania</div>
-            <div class="dim" style="font-size:11px;margin-top:3px">
-              ${p.keep_awake
-                ? 'Aktywna — rzutnik nie zgaśnie w trakcie filmu.'
-                : 'Wyłączona — rzutnik zgaśnie po swoim czasie bezczynności.'}
-            </div>
-          </div>
-          <button class="pill ${p.keep_awake ? 'on' : ''}" data-keepawake="${p.keep_awake ? '0' : '1'}">
-            ${p.keep_awake ? 'Włączona' : 'Włącz'}
-          </button>
-        </div>
-
-        <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
-          <span class="faint" style="font-size:11px;flex-grow:1">Odstęp między sygnałami</span>
-          <div class="seg">
-            ${[10, 20, 30, 45, 60].map((m) =>
-              `<button class="${p.keep_awake_minutes === m ? 'on' : ''}"
-                       data-keepmin="${m}">${m} min</button>`).join('')}
-          </div>
-        </div>
-
-        <div class="faint" style="font-size:11px;margin-top:12px;line-height:1.55">
-          Ustawienia licznika auto-wyłączania <b>nie ma w API</b> — przeszedłem wszystkie
-          kategorie <span class="mono">getSystemSettings</span> i żaden klucz timera na tym
-          modelu nie istnieje. Dlatego zamiast zmieniać ustawienie, zerujemy licznik
-          u źródła: aplikacja wysyła przesunięcie wskaźnika o zero pikseli. Dla rzutnika
-          to zdarzenie od pilota, dla Ciebie — nic. Żaden przycisk się nie wciska,
-          nic nie pojawia się na ekranie.
-          ${p.keep_awake_last ? `<br><br>Ostatni sygnał:
-            <span class="mono">${new Date(p.keep_awake_last * 1000).toLocaleTimeString('pl-PL')}</span>` : ''}
-        </div>
-      </div>
-
       <div class="card">
         <h3>WEJŚCIA</h3>
         ${(p.inputs || []).length ? `<div class="grid"
-             style="grid-template-columns:repeat(3,minmax(0,1fr));gap:7px">
+             style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px">
           ${p.inputs.map((i) => {
             const active = fgInput && String(i.id).toLowerCase() === 'hdmi_' + fgInput;
             return `<button class="pill ${active ? 'on' : ''}" data-projinput="${esc(i.id)}">
               <div style="font-size:13px">${esc(i.label || i.id)}</div>
               <div class="mono faint" style="font-size:10px;margin-top:3px">
                 ${esc(i.id)}${i.connected ? ' · podłączone' : ''}
-              </div>
-            </button>`;
+              </div></button>`;
           }).join('')}
         </div>` : '<div class="dim" style="font-size:12px">brak danych</div>'}
       </div>
@@ -1343,7 +1313,7 @@ function viewProjektor() {
       <div class="card">
         <h3>APLIKACJE</h3>
         ${(p.apps || []).length ? `<div class="grid"
-             style="grid-template-columns:repeat(4,minmax(0,1fr));gap:7px">
+             style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:7px">
           ${p.apps.map((a) => `<button class="pill ${fg === a.id ? 'on' : ''}"
               data-projapp="${esc(a.id)}">${esc(a.title || a.id)}</button>`).join('')}
         </div>` : '<div class="dim" style="font-size:12px">brak danych</div>'}
@@ -1352,14 +1322,13 @@ function viewProjektor() {
 
     <div style="display:flex;flex-direction:column;gap:14px">
       <div class="card">
-        <h3>GŁOŚNOŚĆ RZUTNIKA</h3>
+        <h3>GŁOŚNOŚĆ URZĄDZENIA</h3>
         <div style="display:flex;align-items:baseline;gap:8px">
           <span class="vol-num" style="font-size:34px">${p.volume == null ? '—' : p.volume}</span>
           <span class="dim" style="font-size:13px">/ 100</span>
           <div class="grow"></div>
           <button class="btn ${p.muted ? 'danger' : ''}" data-projmute="1">
-            ${p.muted ? 'Wyciszony' : 'Mute'}
-          </button>
+            ${p.muted ? 'Wyciszony' : 'Mute'}</button>
         </div>
         <div style="display:flex;gap:6px;margin-top:13px">
           <button class="btn" style="flex-grow:1" data-projvol="-5">−5</button>
@@ -1368,8 +1337,39 @@ function viewProjektor() {
           <button class="btn" style="flex-grow:1" data-projvol="5">+5</button>
         </div>
         <div class="faint" style="font-size:11px;margin-top:11px;line-height:1.45">
-          To głośnik własny rzutnika, niezależny od amplitunera. Przy graniu przez
-          zestaw trzymaj go wyciszony.
+          To głośnik własny urządzenia, niezależny od amplitunera.
+          Przy graniu przez zestaw trzymaj go wyciszony.
+        </div>
+      </div>
+
+      <div class="card ${p.keep_awake ? '' : 'warn'}">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="grow">
+            <div style="font-size:13px;font-weight:600">Blokada auto-wyłączania</div>
+            <div class="dim" style="font-size:11px;margin-top:3px">
+              ${p.keep_awake ? 'Aktywna — urządzenie nie zgaśnie w trakcie filmu.'
+                             : 'Wyłączona — zgaśnie po swoim czasie bezczynności.'}
+            </div>
+          </div>
+          <button class="pill ${p.keep_awake ? 'on' : ''}" data-keepawake="${p.keep_awake ? '0' : '1'}">
+            ${p.keep_awake ? 'Włączona' : 'Włącz'}</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+          <span class="faint" style="font-size:11px;flex-grow:1">Odstęp</span>
+          <div class="seg">
+            ${[10, 20, 30, 45, 60].map((m) =>
+              `<button class="${p.keep_awake_minutes === m ? 'on' : ''}"
+                       data-keepmin="${m}">${m} min</button>`).join('')}
+          </div>
+        </div>
+        <div class="faint" style="font-size:11px;margin-top:12px;line-height:1.55">
+          Ustawienia licznika auto-wyłączania nie ma w API — przeszedłem wszystkie
+          kategorie <span class="mono">getSystemSettings</span> i żaden klucz timera
+          na tym modelu nie istnieje. Zamiast tego zerujemy licznik u źródła:
+          przesunięcie wskaźnika o zero pikseli. Dla urządzenia to zdarzenie od pilota,
+          na ekranie nie dzieje się nic.
+          ${p.keep_awake_last ? `<br><br>Ostatni sygnał:
+            <span class="mono">${new Date(p.keep_awake_last * 1000).toLocaleTimeString('pl-PL')}</span>` : ''}
         </div>
       </div>
 
@@ -1377,33 +1377,13 @@ function viewProjektor() {
         <h3>POŁĄCZENIE</h3>
         <div class="row">
           <span class="k">Adres</span><span class="v ${p.connected ? 'teal' : 'red'}">${esc(p.host)}</span>
-          <span class="k">Sparowany</span><span class="v ${p.paired ? 'teal' : 'amber'}">${p.paired ? 'tak' : 'nie'}</span>
+          <span class="k">Sparowane</span><span class="v ${p.paired ? 'teal' : 'amber'}">${p.paired ? 'tak' : 'nie'}</span>
           <span class="k">Protokół</span><span class="v">SSAP · ws://:3000</span>
         </div>
-        <div style="display:flex;gap:6px;margin-top:12px">
-          <button class="btn" data-projscan="1">Szukaj ponownie</button>
-          <span class="faint" style="font-size:11px;align-self:center" id="projscannote">${esc(scan.note || '')}</span>
-        </div>
-        ${(scan.found || []).length ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:5px">
-          ${scan.found.map((d) => `<button class="pill ${d.host === p.host ? 'on' : ''}"
-              data-projuse="${esc(d.host)}" data-name="${esc(d.name)}" data-model="${esc(d.model)}">
-            <span class="mono">${esc(d.host)}</span>
-            <span style="margin-left:9px">${esc(d.name || '(bez nazwy)')}</span>
-          </button>`).join('')}
-        </div>` : ''}
-      </div>
-
-      <div class="card">
-        <h3>JAK TO DZIAŁA</h3>
-        <div class="faint" style="font-size:11px;line-height:1.6">
-          SSAP to JSON po WebSocket, bez szyfrowania i bez keycode. Klient napisany
-          od zera na gołym sockecie — zero zależności, jak reszta projektu.<br><br>
-          <b style="color:#9aa3ab">Pułapka, na którą się nadziałem:</b> webOS weryfikuje
-          nagłówek <span class="mono">Origin</span> i zrywa połączenie kodem 1008
-          „invalid origin" dla wszystkiego poza <span class="mono">null</span>
-          i <span class="mono">file://</span>. Brak nagłówka też nie przechodzi.<br><br>
-          Klucz klienta z parowania leży w
-          <span class="mono">%APPDATA%\\avree-tuner\\webos-keys.json</span>.
+        <div class="faint" style="font-size:11px;margin-top:11px;line-height:1.5">
+          Klucz parowania jest wiązany z ADRESEM. Gdy urządzenie dostanie nowy
+          adres z DHCP, trzeba sparować je ponownie — telewizor przeszedł tak
+          z .78 na .17 przy włączeniu.
         </div>
       </div>
     </div>
@@ -1880,49 +1860,46 @@ function bind() {
 
   // --- rzutnik
   view.querySelectorAll('[data-key]').forEach((b) =>
-    b.onclick = () => projAct('press', b.dataset.key));
+    b.onclick = () => webosAct('press', b.dataset.key));
   view.querySelectorAll('[data-keepawake]').forEach((b) =>
-    b.onclick = () => api('/api/projector', {
+    b.onclick = () => api('/api/webos', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'keep_awake', value: b.dataset.keepawake === '1' })
+      body: JSON.stringify({ host: WEBOS_HOST, action: 'keep_awake',
+                             value: b.dataset.keepawake === '1' })
     }).then((r) => { toast(r.on ? 'Blokada włączona — co ' + r.minutes + ' min' : 'Blokada wyłączona', true);
                      loadProjector(true); })
       .catch((e) => toast(e.message, false)));
   view.querySelectorAll('[data-keepmin]').forEach((b) =>
-    b.onclick = () => api('/api/projector', {
+    b.onclick = () => api('/api/webos', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'keep_awake', value: true,
+      body: JSON.stringify({ host: WEBOS_HOST, action: 'keep_awake', value: true,
                              minutes: parseInt(b.dataset.keepmin, 10) })
     }).then((r) => { toast('Sygnał co ' + r.minutes + ' min', true); loadProjector(true); })
       .catch((e) => toast(e.message, false)));
 
+  view.querySelectorAll('[data-webosdev]').forEach((b) =>
+    b.onclick = () => { WEBOS_HOST = b.dataset.webosdev; lastSignature = ''; render(); });
+
   view.querySelectorAll('[data-projact]').forEach((b) =>
     b.onclick = () => {
       const a = b.dataset.projact;
-      if (a === 'toast') projAct('toast', 'AVREE Tuner — połączono');
-      else if (a === 'power_off') projAct('power_off').then(() => toast('Wyłączam rzutnik', true));
-      else if (a === 'wake') projAct('wake').then(() => toast('Wysłano magiczny pakiet', true));
-      else projAct(a);
+      if (a === 'toast') webosAct('toast', 'AVREE Tuner — połączono');
+      else if (a === 'power_off') webosAct('power_off').then(() => toast('Wyłączam rzutnik', true));
+      else if (a === 'wake') webosAct('wake').then(() => toast('Wysłano magiczny pakiet', true));
+      else webosAct(a);
     });
   view.querySelectorAll('[data-projinput]').forEach((b) =>
-    b.onclick = () => projAct('input', b.dataset.projinput));
+    b.onclick = () => webosAct('input', b.dataset.projinput));
   view.querySelectorAll('[data-projapp]').forEach((b) =>
-    b.onclick = () => projAct('launch', b.dataset.projapp));
+    b.onclick = () => webosAct('launch', b.dataset.projapp));
   view.querySelectorAll('[data-projvol]').forEach((b) =>
-    b.onclick = () => projAct('volume_step', parseInt(b.dataset.projvol, 10)));
+    b.onclick = () => webosAct('volume_step', parseInt(b.dataset.projvol, 10)));
   view.querySelectorAll('[data-projmute]').forEach((b) =>
-    b.onclick = () => projAct('mute', !(PROJ && PROJ.muted)));
+    b.onclick = () => { const d = currentWebos(); webosAct('mute', !(d && d.muted)); });
   view.querySelectorAll('[data-projrefresh]').forEach((b) =>
     b.onclick = () => loadProjector(true));
   view.querySelectorAll('[data-projscan]').forEach((b) =>
     b.onclick = () => projScan());
-  view.querySelectorAll('[data-projuse]').forEach((b) =>
-    b.onclick = () => api('/api/projector', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'use', host: b.dataset.projuse,
-                             name: b.dataset.name, model: b.dataset.model })
-    }).then(() => { toast('Wybrano ' + b.dataset.projuse, true); loadProjector(true); })
-      .catch((e) => toast(e.message, false)));
 
   // --- equalizer
   view.querySelectorAll('[data-eqch]').forEach((b) =>
@@ -2063,7 +2040,7 @@ document.addEventListener('keydown', (e) => {
   const button = KEYMAP[e.key];
   if (!button) return;
   e.preventDefault();
-  projAct('press', button);
+  webosAct('press', button);
 });
 
 /* ---------- start ---------- */

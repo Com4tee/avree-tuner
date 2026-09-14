@@ -21,6 +21,11 @@ from .discovery import CONFIG_PATH
 FRESH_FAST = 3.0        # zasilanie, głośność, aktywna aplikacja
 FRESH_SLOW = 120.0      # listy wejść i aplikacji
 
+# Po nieudanej próbie połączenia odczekujemy, zanim spróbujemy ponownie.
+# Bez tego jedno wyłączone urządzenie blokuje odczyt stanu wszystkich
+# pozostałych: każde odpytanie czeka na pełny limit czasu połączenia.
+RETRY_AFTER = 30.0
+
 
 def load_settings() -> dict:
     try:
@@ -55,6 +60,7 @@ class Projector:
         self._stamps: dict[str, float] = {}
         self.last_error: str | None = None
         self.pairing = False
+        self._failed_at: float = 0.0
         # Podtrzymywanie aktywności - patrz keep_awake().
         self.keep_awake_on = bool(cfg.get("projector_keep_awake", False))
         self.keep_awake_minutes = int(cfg.get("projector_keep_awake_minutes", 30))
@@ -68,14 +74,24 @@ class Projector:
 
     def _device(self) -> webos.WebOsDevice:
         if not self.host:
-            raise webos.WebOsError("nie wskazano rzutnika — użyj wyszukiwania")
+            raise webos.WebOsError("nie wskazano urządzenia — użyj wyszukiwania")
         if self._dev is None or not self._dev.connected:
+            since = time.time() - self._failed_at
+            if self._failed_at and since < RETRY_AFTER:
+                raise webos.WebOsError(
+                    f"urządzenie nie odpowiada (kolejna próba za "
+                    f"{int(RETRY_AFTER - since)} s)")
             dev = webos.WebOsDevice(self.host, name=self.name)
             # Klucz z poprzedniego parowania wczytuje się sam; jeśli go nie ma,
             # urządzenie pokaże pytanie na ekranie.
             self.pairing = webos.load_keys().get(self.host) is None
-            dev.connect(prompt_timeout=90.0 if self.pairing else 15.0)
+            try:
+                dev.connect(prompt_timeout=90.0 if self.pairing else 15.0)
+            except webos.WebOsError:
+                self._failed_at = time.time()
+                raise
             self.pairing = False
+            self._failed_at = 0.0
             self._dev = dev
         return self._dev
 
@@ -86,7 +102,12 @@ class Projector:
             self._dev = None
 
     def _call(self, name: str, fn, fresh: float):
-        """Wywołuje `fn` i buforuje wynik; przy zerwanym łączu próbuje raz ponownie."""
+        """Wywołuje `fn` i buforuje wynik; przy zerwanym łączu próbuje raz ponownie.
+
+        Ponowna próba ma sens tylko wtedy, gdy urządzenie w ogóle odpowiada.
+        Przy martwym adresie druga próba to kolejne kilkanaście sekund czekania,
+        więc backoff w `_device` wycina ją od razu.
+        """
         now = time.time()
         if name in self._cache and now - self._stamps.get(name, 0) < fresh:
             return self._cache[name]
@@ -273,3 +294,92 @@ class Projector:
             save_setting("projector_mac", self.mac)
             return self.mac
         return None
+
+
+# --------------------------------------------------------------------
+# wiele urządzeń webOS naraz
+# --------------------------------------------------------------------
+
+class WebOsHub:
+    """Rejestr urządzeń webOS — rzutnik i telewizor obsługiwane równolegle.
+
+    Każde urządzenie to osobny `Projector` z własnym kluczem klienta,
+    własnym buforem i własną blokadą auto-wyłączania. Klucze parowania są
+    per adres, więc przeniesienie urządzenia na inny adres DHCP wymaga
+    ponownego parowania — co zresztą się zdarzyło przy telewizorze.
+    """
+
+    def __init__(self) -> None:
+        self.devices: dict[str, Projector] = {}
+        self.scan_note = ""
+        self.scanning = False
+        self._lock = threading.RLock()
+        for entry in load_settings().get("webos_devices", []):
+            self.adopt(entry.get("host", ""), entry.get("name", ""),
+                       entry.get("model", ""), remember=False)
+
+    def adopt(self, host: str, name: str = "", model: str = "",
+              remember: bool = True) -> Projector:
+        with self._lock:
+            if not host:
+                raise webos.WebOsError("pusty adres")
+            device = self.devices.get(host)
+            if device is None:
+                device = Projector(host=host)
+                device.name, device.model = name, model
+                device.learn_mac()
+                self.devices[host] = device
+            else:
+                device.name = name or device.name
+                device.model = model or device.model
+            if remember:
+                self._persist()
+            return device
+
+    def forget(self, host: str) -> None:
+        with self._lock:
+            device = self.devices.pop(host, None)
+            if device:
+                device.disconnect()
+            self._persist()
+
+    def _persist(self) -> None:
+        save_setting("webos_devices", [
+            {"host": h, "name": d.name, "model": d.model, "mac": d.mac}
+            for h, d in self.devices.items()
+        ])
+
+    def overview(self) -> list[dict]:
+        with self._lock:
+            hosts = list(self.devices)
+        if not hosts:
+            return []
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            states = list(pool.map(lambda h: self.devices[h].status(), hosts))
+        for host, state in zip(hosts, states):
+            state["paired"] = bool(webos.load_keys().get(host))
+        return states
+
+    def act(self, host: str, action: str, value=None) -> dict:
+        with self._lock:
+            device = self.devices.get(host)
+        if device is None:
+            raise webos.WebOsError(f"nie znam urządzenia {host}")
+        return device.act(action, value)
+
+    def scan(self) -> None:
+        """Szuka urządzeń webOS i dopisuje nowe, zachowując już znane."""
+        self.scanning = True
+        self.scan_note = "szukam…"
+        try:
+            found = webos_discovery.find()
+            for entry in found:
+                self.adopt(entry["host"], entry.get("name", ""),
+                           entry.get("model", ""))
+            self.scan_note = (f"znaleziono {len(found)}" if found
+                              else "brak urządzeń webOS w tej sieci")
+        except Exception as e:                       # noqa: BLE001
+            self.scan_note = f"błąd: {e}"
+        finally:
+            self.scanning = False

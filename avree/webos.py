@@ -134,7 +134,7 @@ class WebSocket:
     Fragmentację obsługuje, bo webOS potrafi podzielić dłuższą listę aplikacji.
     """
 
-    def __init__(self, host: str, port: int = SSAP_PORT, timeout: float = 10.0) -> None:
+    def __init__(self, host: str, port: int = SSAP_PORT, timeout: float = 4.0) -> None:
         self.host = host
         self.port = port
         self.sock: socket.socket | None = None
