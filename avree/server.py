@@ -20,7 +20,8 @@ from typing import Any
 
 from . import (androidtv, cast, discovery, eq,
                projector as projector_mod, session as session_mod,
-               stream as stream_mod, upnp, webos)
+               stream as stream_mod, subalign as subalign_mod,
+               upnp, webos)
 from .avr import (
     CROSSOVER_FREQS,
     OSD_KEYS,
@@ -89,6 +90,9 @@ class App:
         self.cast = cast.CastHub()
         # Splot w torze PC: pętla systemowa -> filtr -> amplituner.
         self.stream = stream_mod.LoopbackStream()
+        # Zestrajanie czasowe dwóch subwooferów — przemiatanie
+        # odległości SW2 z pomiarem mikrofonem.
+        self.subalign = subalign_mod.SubAlign()
 
     def ensure_renderer(self) -> upnp.Renderer | None:
         if self.renderer is None and self.renderer_error is None:
@@ -194,6 +198,8 @@ class Handler(BaseHTTPRequestHandler):
                         "note": self.app.webos.scan_note,
                         "scanning": self.app.webos.scanning,
                         "buttons": webos.PointerInput.BUTTONS})
+        elif route == "/api/subalign":
+            self._json(self._subalign_payload())
         elif route == "/api/stream":
             self._json(self._stream_payload())
         elif route == "/stream.wav":
@@ -297,6 +303,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(self._eq_save(body))
             elif route == "/api/stream":
                 self._json(self._stream_action(body))
+            elif route == "/api/subalign":
+                self._json(self._subalign_action(body))
             elif route == "/api/projector":
                 self._json(self._projector_action(body))
             elif route == "/api/projector/scan":
@@ -777,6 +785,68 @@ class Handler(BaseHTTPRequestHandler):
         if self.app.stream.running:
             self.app.stream.configure(design)
         payload = self._eq_payload()
+        payload["ok"] = True
+        return payload
+
+    # ---- zestrajanie subwooferów ---------------------------------------
+
+    def _subalign_payload(self) -> dict[str, Any]:
+        sa = self.app.subalign
+        state = self.app.avr.snapshot()
+        distances = state.get("distances") or {}
+        centre = distances.get(sa.plan.channel)
+        out = sa.overview()
+        out["distances"] = distances
+        out["step_cm"] = state.get("distance_step_cm", 1)
+        out["two_subs"] = (state.get("speakers") or {}).get("SWF") == "2SP"
+        out["estimate_s"] = (sa.plan.estimate_seconds(int(centre))
+                             if centre is not None else None)
+        out["points"] = (sa.plan.points(int(centre))
+                         if centre is not None else None)
+        return out
+
+    def _subalign_action(self, body: dict[str, Any]) -> dict[str, Any]:
+        sa = self.app.subalign
+        action = str(body.get("action", ""))
+
+        if action == "plan":
+            plan = sa.plan
+            for key in ("span_cm", "step_cm"):
+                if key in body:
+                    setattr(plan, key, int(body[key]))
+            for key in ("f_low", "f_high", "duration", "settle_s"):
+                if key in body:
+                    setattr(plan, key, float(body[key]))
+            if body.get("channel"):
+                plan.channel = str(body["channel"])
+        elif action == "start":
+            # Tor pomiarowy jest wspólny z zakładką Pomiar — ta sama karta,
+            # ten sam mikrofon, te same ustawienia wejścia.
+            sa.setup = self.app.measure.setup
+            sa.out_channel = int(body.get("out_channel", 0))
+            return dict(sa.start(self.app.avr), **self._subalign_payload())
+        elif action == "stop":
+            sa.stop()
+        elif action == "apply":
+            # Wpisanie znalezionej nastawy na stałe. Świadomie osobny krok:
+            # przemiatanie zawsze przywraca stan wyjściowy, więc nic się
+            # nie zmienia, dopóki użytkownik tego nie potwierdzi.
+            analysis = sa.analyse()
+            if not analysis.get("ready"):
+                raise ValueError("brak wyniku do zastosowania")
+            value = int(body.get("cm", analysis["best_cm"]))
+            self.app.avr.set_distance_cm(sa.plan.channel, value)
+            sa.original_cm = value
+        elif action == "distance":
+            # Ręczna nastawa dowolnego kanału.
+            channel = str(body.get("channel", ""))
+            if not channel:
+                raise ValueError("brak kanału")
+            self.app.avr.set_distance_cm(channel, int(body["cm"]))
+        else:
+            raise ValueError(f"nieznana akcja: {action}")
+
+        payload = self._subalign_payload()
         payload["ok"] = True
         return payload
 

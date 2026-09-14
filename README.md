@@ -100,10 +100,12 @@ Dwa ograniczenia są twarde i wynikają ze sprzętu:
    zsumowany do stereo (ITU-R BS.775: środek i surroundy po −3 dB, LFE pominięty).
    Pełne 5.1 przechodzi **wyłącznie** przez lokalne wyjście HDMI.
 
-2. **Drugiego subwoofera nie da się skorygować z komputera.** Z PC wychodzi
-   jeden kanał LFE; rozdział na SW1 i SW2 robi wzmacniacz w środku. Różnicę
-   między dwoma subami wyrówna tylko Audyssey Sub EQ HT albo plik `.ady` —
-   czyli etap 6, jeszcze niezbudowany.
+2. **Korekcji AMPLITUDY drugiego subwoofera nie da się zrobić z komputera.**
+   Z PC wychodzi jeden kanał LFE; rozdział na SW1 i SW2 robi wzmacniacz
+   w środku. Osobne filtry dla każdego suba to plik `.ady`, czyli etap 6.
+
+   **Ale ZESTROJENIE CZASOWE obu subów jest osiągalne po sieci** — patrz
+   niżej. To osobna warstwa nastaw i działa niezależnie od `.ady`.
 
 Kolejność kanałów w pętli przyjęta jest wg standardu WAVE (FL, FR, środek,
 LFE, tylne). **Ta kolejność nie została sprawdzona na docelowym sprzęcie** —
@@ -142,9 +144,56 @@ obsługuje każde żądanie na nowym wątku, więc `avree/stream.py` wchodzi do 
 jawnie na każdym wątku — bez tego pierwsze wejście w zakładkę kończy się
 błędem `0x800401f0`.
 
+## Zestrojenie czasowe dwóch subwooferów
+
+Zakładka **Pomiar**, karta „Zestrojenie czasowe dwóch subwooferów".
+
+Okazało się, że **każdy subwoofer ma własną, ustawialną po sieci odległość**:
+
+```
+SSSDESW  0427M     subwoofer 1: 4,27 m
+SSSDESW2 0886M     subwoofer 2: 8,86 m
+SSSDESTP 01M       krok 1 cm
+```
+
+Różnica 4,59 m to **13,4 ms** — to nie odległości fizyczne, tylko opóźnienie
+policzone przez Audyssey Sub EQ HT. Krok 1 cm = **29 µs**, czyli pół stopnia
+fazy przy 50 Hz. Odczyt i zapis sprawdzone empirycznie na tym egzemplarzu.
+
+**Sprostowanie.** Wcześniej stało tu, że odległości głośników są po telnecie
+niedostępne. To była pomyłka: sprawdzony był mnemonik `SSDST` zamiast `SSSDE`.
+Nieobecność w `Deviceinfo.xml` (`SubwooferNum 1`, zero tagów odległości)
+też nie jest dowodem — ten manifest opisuje, czego używa aplikacja Denona,
+a nie co przyjmuje telnet.
+
+### Jak to działa
+
+Oba suby dostają ten sam sygnał LFE i nie da się z zewnątrz wyciszyć jednego
+(`CVSW2` schodzi do −12 dB, nie do ciszy). Dlatego zamiast mierzyć je osobno,
+przemiatamy opóźnienie jednego i mierzymy mikrofonem sumę w miejscu odsłuchu.
+Maksimum poziomu w paśmie = najlepsze sumowanie. Metoda nie wymaga
+rozdzielania kanałów i mierzy od razu to, co słychać na kanapie.
+
+Sygnałem jest krótki sweep 20–120 Hz, nie pojedynczy ton: jedna częstotliwość
+potrafi mieć maksimum gdzie indziej niż całe pasmo i zestroiłaby 40 Hz
+kosztem 70 Hz.
+
+Wierzchołek jest doprecyzowywany parabolą przez trzy punkty wokół maksimum.
+Sprawdzone na symulacji z wstawioną różnicą 137 cm i krokiem przemiatania
+10 cm: znalezione 135 cm, czyli **błąd 2 cm (0,058 ms)** — lepiej niż krok.
+
+Nastawa **wraca na miejsce po każdym przemiataniu, także po błędzie**.
+Zapis na stałe to osobny przycisk.
+
+### Ograniczenie metody
+
+Maksimum znalezione dla jednej pozycji mikrofonu jest optymalne dla tej
+pozycji. Przy szerokiej kanapie trzeba powtórzyć w kilku punktach i wziąć
+nastawę dobrą wszędzie, zamiast idealnej w jednym miejscu.
+
 ## Ograniczenia ustalone empirycznie
 
-- Odległości głośników **nie są czytelne** po telnecie — trzeba je wyliczyć z pomiaru.
+- Odległości głośników **czyta i ustawia `SSSDE`**, krok 1 cm, każdy sub osobno.
 - Renderer sieciowy jest **stereo**; AC3/DTS wymagają HDMI albo optyki.
 - Amplituner przyjmuje **jedno połączenie telnet naraz**.
 - X3300W (rocznik 2016) **nie ma** `Save & Load` na USB — obecnej kalibracji nie da się
@@ -184,6 +233,9 @@ w innym pokoju niż ekrany.
 - [ ] Rzutnik `192.168.0.75` — wysłane INFO i BACK
 - [ ] Telewizor `192.168.0.17` — wysłane INFO, BACK i napis na ekranie
 - [ ] Google TV `192.168.0.58` — wysłane HOME, strzałki w czterech kierunkach
+- [ ] Zestrojenie subwooferów **akustycznie** — sterowanie odległością
+      sprawdzone na sprzęcie, silnik na symulacji, ale przemiatania
+      z mikrofonem jeszcze nikt nie uruchomił
 - [ ] Blokada auto-wyłączania — potwierdzenia wymaga dopiero dłuższy seans
 - [ ] Splot w torze PC **na ucho** — poprawność liczbowa i transport są
       zmierzone, ale nikt jeszcze nie słuchał wyniku przez głośniki

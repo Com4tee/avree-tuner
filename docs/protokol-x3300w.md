@@ -49,11 +49,66 @@ MV05  MVMAX 80
 Wszystkie kanały jako Large + LFE+Main oznacza, że pełne pasmo idzie do kolumn PA
 równolegle z subami.
 
+## Odległości głośników — `SSSDE`
+
+**Działa w obie strony: odczyt i zapis.** Sprawdzone na tym egzemplarzu.
+
+`SSSDE ?` zwraca 21 linii — wszystkie pozycje, także te nieużywane w tym
+systemie. Wartość to centymetry z sufiksem `M`, czyli `0427M` = 4,27 m.
+
+```
+SSSDEFL 0498M   SSSDEFR 0582M   SSSDEC  0403M
+SSSDESL 0339M   SSSDESR 0474M
+SSSDESW 0427M   ← subwoofer 1
+SSSDESW2 0886M  ← subwoofer 2
+SSSDESTP 01M    ← krok nastawy: 1 cm
+```
+
+**Każdy subwoofer ma własną odległość.** Różnica SW ↔ SW2 wynosi tu 4,59 m,
+czyli **13,4 ms** — to nie są odległości fizyczne, tylko opóźnienie policzone
+przez Audyssey Sub EQ HT przy kalibracji.
+
+Krok 1 cm to **29 µs** przy prędkości dźwięku 343 m/s. Przy 50 Hz (długość
+fali 6,86 m) jeden krok odpowiada przesunięciu fazy o **0,5°**. Rozdzielczość
+jest więc o rząd wielkości drobniejsza, niż potrzeba do zestrojenia subów.
+
+Zapis sprawdzony empirycznie:
+
+```
+> SSSDESW2 0890M
+< SSSDESW2 0890M          echo
+> SSSDE ?
+< SSSDESW2 0890M          odczyt potwierdza
+> SSSDESW2 0886M          przywrócenie
+< SSSDESW2 0886M
+```
+
+Zmiana odległości **nie unieważnia filtrów Audyssey** — to osobna warstwa
+nastaw. Krzywe korekcyjne zostają, zmienia się tylko opóźnienie kanału.
+
+### Poziomy subwooferów — osobne, ale zależne od trybu
+
+`CV?` daje `CVSW 50` i `CVSW2 50` — poziom każdego suba z osobna.
+`PSSWL ?` daje `PSSWL 50` i `PSSWL2 50`.
+
+Uwaga na pułapkę: `CV?` listuje **tylko kanały aktywne w bieżącym trybie
+dźwięku**. Wcześniejszy pomiar dał 5 kanałów bez subwooferów, bo wzmacniacz
+stał wtedy w trybie stereo. To nie był brak funkcji, tylko brak kontekstu.
+
+### Czego Deviceinfo.xml nie mówi
+
+`Deviceinfo.xml` podaje `SubwooferNum 1` i nie ma w nim ŻADNEGO tagu
+odległości — tylko `AudioDelay` i `DelayTime`, czyli lip-sync. Ten manifest
+opisuje, czego używa aplikacja Denona, a **nie** pełne możliwości telnetu.
+Wniosek: nieobecność w Deviceinfo.xml nie jest dowodem na brak funkcji.
+
 ## Komendy, które NIE odpowiadają na tym modelu
 
 `DC?`, `PSLFC ?`, `PSCNTAMT ?`, `PSTONECTRL ?`, `SSFRQ ?`, `SSSPCFRO ?`,
 `SSPAAMOD ?` (działa `SSPAA ?`), `SSINFAISFIL ?`, `SSHOSIFP ?`, `SYMO ?`,
-`SSDST ?` (odległości głośników **niedostępne** po telnecie).
+`SSDST ?` — ale to **zły mnemonik**, nie brak funkcji. Odległości czyta i ustawia
+`SSSDE` (patrz niżej). Wcześniejszy wpis mówiący, że odległości są niedostępne
+po telnecie, był **błędny**.
 
 `SSSOD ?` to lista **źródeł** (USE/DEL), nie trybów dźwięku.
 
@@ -122,7 +177,6 @@ Milczą — tych funkcji X3300W nie ma:
 ```
 PSLFC  PSCNTAMT           Audyssey LFC i Containment Amount (wyższe modele)
 PSDSX  PSSTW  PSSTH  PSDEH   Audyssey DSX (wycofane wraz z Atmosem)
-SSDST                     odległości głośników
 PSMDAX  PSATT  PSPHG  PSSP:  PSVOL
 SSGEQ i pochodne          pasma equalizera graficznego
 SSSPDIF  SSBAS  SSECO  SSTPD  SSTRG

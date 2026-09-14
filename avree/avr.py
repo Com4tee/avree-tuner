@@ -166,7 +166,8 @@ class Avr:
             "bass": None, "treble": None, "dialog": None, "lfe": None,
             "tone_control": None, "drc_value": None,
             "channel_levels": {}, "setup_levels": {}, "sub_levels": {},
-            "speakers": {}, "crossovers": {},
+            "speakers": {}, "crossovers": {}, "distances": {},
+            "distance_step_cm": 1,
             "subwoofer_mode": None, "lfe_lowpass": None, "crossover_mode": None,
             "amp_assign": None,
             "device": {}, "sources": [],
@@ -210,7 +211,7 @@ class Avr:
                         "lfe_lowpass", "crossover_mode", "amp_assign"):
                 self._state[key] = None
             for key in ("channel_levels", "setup_levels", "sub_levels",
-                        "speakers", "crossovers", "device"):
+                        "speakers", "crossovers", "distances", "device"):
                 self._state[key] = {}
             self._state["sources"] = []
 
@@ -350,6 +351,19 @@ class Avr:
                 s["crossovers"]["ALL"] = val.strip()
             elif pos and val.strip().isdigit():
                 s["crossovers"][pos] = int(val)
+        # --- odległości głośników (SSSDE, w centymetrach)
+        #
+        # Uwaga historyczna: przez dłuższy czas w dokumentacji stało, że
+        # odległości są po telnecie niedostępne. To była pomyłka — sprawdzony
+        # był mnemonik SSDST zamiast SSSDE. Odczyt i ZAPIS działają, krok 1 cm.
+        elif line.startswith("SSSDE"):
+            ch, _, val = line[5:].partition(" ")
+            val = val.strip().rstrip("M")
+            if ch == "STP" and val.isdigit():
+                s["distance_step_cm"] = int(val)
+            elif ch and val.isdigit():
+                s["distances"][ch] = int(val)
+
         elif line.startswith("SSSWM "):
             s["subwoofer_mode"] = line[6:].strip()
         elif line.startswith("SSLFL "):
@@ -416,6 +430,7 @@ class Avr:
             s["sub_levels"] = dict(self._state["sub_levels"])
             s["speakers"] = dict(self._state["speakers"])
             s["crossovers"] = dict(self._state["crossovers"])
+            s["distances"] = dict(self._state["distances"])
             s["device"] = dict(self._state["device"])
             s["sources"] = [dict(x) for x in self._state["sources"]]
             s["host"] = self.host
@@ -446,7 +461,7 @@ class Avr:
                   "PSMULTEQ: ?", "PSDYNEQ ?", "PSDYNVOL ?", "PSREFLEV ?",
                   "PSGEQ ?", "PSCINEMA EQ. ?", "PSLOM ?", "PSDIC ?",
                   "PSRSZ ?", "PSNEURAL ?", "PSEFF ?", "PSDRC ?",
-                  "CV?", "PSSWL ?", "SSLEV ?", "SSSPC ?", "SSCFR ?", "SSSWM ?", "SSLFL ?",
+                  "CV?", "PSSWL ?", "SSLEV ?", "SSSDE ?", "SSSPC ?", "SSCFR ?", "SSSWM ?", "SSLFL ?",
                   "SSPAA ?", "SSINFAISSIG ?", "SSINFAISFSV ?",
                   "SSINFFRM ?", "NSFRN ?", "VIALL?", "SSFUN ?", "SSSOD ?"):
             try:
@@ -516,6 +531,24 @@ class Avr:
             raise ValueError(f"nieznany rozmiar: {size}")
         self.send(f"SSSPC{position} {size}")
         self._reread("SSSPC ?")
+
+    # Zakres wg menu amplitunera: 0,00–18,00 m. Krok bierzemy z urządzenia
+    # (SSSDESTP), a nie z założenia — na tym egzemplarzu to 1 cm, czyli
+    # 29 µs przy 343 m/s. Zmiana odległości NIE unieważnia filtrów Audyssey:
+    # to osobna warstwa nastaw, krzywe korekcyjne zostają.
+    DISTANCE_MIN_CM = 0
+    DISTANCE_MAX_CM = 1800
+
+    def set_distance_cm(self, channel: str, centimetres: int) -> int:
+        """Ustawia odległość kanału w centymetrach. Zwraca wartość wysłaną."""
+        value = int(round(centimetres))
+        if not self.DISTANCE_MIN_CM <= value <= self.DISTANCE_MAX_CM:
+            raise ValueError(
+                f"odległość {value} cm poza zakresem "
+                f"{self.DISTANCE_MIN_CM}–{self.DISTANCE_MAX_CM} cm")
+        self.send(f"SSSDE{channel} {value:04d}M")
+        self._reread("SSSDE ?")
+        return value
 
     def set_crossover(self, position: str, freq: int) -> None:
         self.send(f"SSCFR{position} {int(freq):03d}")

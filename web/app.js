@@ -1514,6 +1514,160 @@ function optimPanel() {
   </div>`;
 }
 
+/* ---------- zestrajanie czasowe dwóch subwooferów ----------
+   Przemiatamy odległość SW2 (SSSDESW2, krok 1 cm = 29 us) i mierzymy
+   mikrofonem poziom w paśmie. Maksimum = najlepsze sumowanie na kanapie.
+   Nastawa zawsze wraca na miejsce; zmiana jest osobnym, świadomym krokiem. */
+
+let SUBALIGN = null;
+let subalignTimer = null;
+
+const TIP_SA_SPAN =
+  'Jak daleko w obie strony od bieżącej nastawy przemiatamy. 150 cm to ±4,4 ms — '
+  + 'więcej niż pół okresu przy 50 Hz, więc maksimum na pewno mieści się w zakresie.';
+const TIP_SA_STEP =
+  'Co ile centymetrów mierzymy. Mniejszy krok to dłuższy pomiar, ale wierzchołek '
+  + 'i tak jest doprecyzowywany parabolą przez trzy punkty wokół maksimum — '
+  + 'dokładność wychodzi lepsza niż sam krok.';
+const TIP_SA_BAND =
+  'Pasmo, w którym liczymy poziom. Szerzej niż pojedynczy ton celowo: jedna '
+  + 'częstotliwość potrafi mieć maksimum gdzie indziej niż całe pasmo, i wtedy '
+  + 'zestroiłoby się 40 Hz kosztem 70 Hz.';
+const TIP_SA_APPLY =
+  'Wpisuje znalezioną nastawę do amplitunera na stałe. Do tego momentu nic się '
+  + 'nie zmieniło — przemiatanie zawsze przywraca stan wyjściowy.';
+
+function subalignCurve(sa) {
+  const rows = sa.results || [];
+  if (rows.length < 2) return '';
+  const W = 620, H = 150, L = 42, B = 22, T = 8;
+  const cms = rows.map((r) => r.cm);
+  const dbs = rows.map((r) => r.level_db);
+  const x0 = Math.min(...cms), x1 = Math.max(...cms);
+  const y0 = Math.min(...dbs), y1 = Math.max(...dbs);
+  const px = (c) => L + ((c - x0) / Math.max(1, x1 - x0)) * (W - L - 10);
+  const py = (d) => T + (1 - (d - y0) / Math.max(0.01, y1 - y0)) * (H - T - B);
+  const path = rows.map((r, i) => `${i ? 'L' : 'M'}${px(r.cm).toFixed(1)},${py(r.level_db).toFixed(1)}`).join('');
+  const a = sa.analysis || {};
+  const best = a.ready ? `<line x1="${px(a.best_cm)}" y1="${T}" x2="${px(a.best_cm)}" y2="${H - B}"
+      stroke="var(--teal)" stroke-width="1.5"/>` : '';
+  const cur = sa.original_cm != null ? `<line x1="${px(sa.original_cm)}" y1="${T}" x2="${px(sa.original_cm)}" y2="${H - B}"
+      stroke="var(--dim)" stroke-width="1" stroke-dasharray="3 3"/>` : '';
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:10px">
+    <rect x="${L}" y="${T}" width="${W - L - 10}" height="${H - T - B}" fill="none" stroke="var(--line)"/>
+    ${cur}${best}
+    <path d="${path}" fill="none" stroke="var(--fg)" stroke-width="1.5"/>
+    <text x="4" y="${py(y1) + 4}" font-size="9" fill="var(--dim)">${y1.toFixed(1)}</text>
+    <text x="4" y="${py(y0) + 4}" font-size="9" fill="var(--dim)">${y0.toFixed(1)}</text>
+    <text x="${L}" y="${H - 6}" font-size="9" fill="var(--dim)">${x0} cm</text>
+    <text x="${W - 50}" y="${H - 6}" font-size="9" fill="var(--dim)">${x1} cm</text>
+  </svg>`;
+}
+
+function cardSubAlign() {
+  const sa = SUBALIGN;
+  if (!sa) { setTimeout(loadSubAlign, 0);
+    return '<div class="card"><h3>ZESTROJENIE SUBWOOFERÓW</h3><div class="dim">sprawdzam…</div></div>'; }
+
+  const d = sa.distances || {};
+  const plan = sa.plan || {};
+  const a = sa.analysis || {};
+  const on = sa.running;
+  const sw = d.SW, sw2 = d.SW2;
+  const diff = (sw != null && sw2 != null) ? (sw2 - sw) : null;
+
+  if (!sa.two_subs) {
+    return `<div class="card"><h3>ZESTROJENIE SUBWOOFERÓW</h3>
+      <div class="dim" style="font-size:13px">Amplituner zgłasza jeden subwoofer
+      (<span class="mono">SSSPCSWF</span> ≠ <span class="mono">2SP</span>) — nie ma czego zestrajać.</div></div>`;
+  }
+
+  return `
+  <div class="card">
+    <h3>ZESTROJENIE CZASOWE DWÓCH SUBWOOFERÓW</h3>
+
+    <div class="row">
+      <span class="k">Subwoofer 1</span><span class="v mono">${sw != null ? (sw / 100).toFixed(2) + ' m' : '—'}</span>
+      <span class="k">Subwoofer 2</span><span class="v mono">${sw2 != null ? (sw2 / 100).toFixed(2) + ' m' : '—'}</span>
+      <span class="k">Różnica</span><span class="v mono ${diff ? 'teal' : ''}">${diff != null
+        ? (diff / 100).toFixed(2) + ' m = ' + (diff / 100 / 343 * 1000).toFixed(2) + ' ms' : '—'}</span>
+      <span class="k">Krok nastawy</span><span class="v mono">${sa.step_cm} cm = ${(sa.step_cm / 100 / 343 * 1000).toFixed(3)} ms</span>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <span class="k"${rawTip(TIP_SA_SPAN, 'Zakres')}>Zakres ±</span>
+      <span class="v"><input type="number" id="saspan" value="${plan.span_cm}" step="10" min="10" max="600" ${on ? 'disabled' : ''}> cm</span>
+      <span class="k"${rawTip(TIP_SA_STEP, 'Krok')}>Krok</span>
+      <span class="v"><input type="number" id="sastep" value="${plan.step_cm}" step="1" min="1" max="50" ${on ? 'disabled' : ''}> cm</span>
+      <span class="k"${rawTip(TIP_SA_BAND, 'Pasmo oceny')}>Pasmo</span>
+      <span class="v"><input type="number" id="salow" value="${plan.f_low}" step="5" min="10" max="60" ${on ? 'disabled' : ''}>
+        – <input type="number" id="sahigh" value="${plan.f_high}" step="5" min="60" max="300" ${on ? 'disabled' : ''}> Hz</span>
+    </div>
+
+    <div style="display:flex;gap:7px;align-items:center;margin-top:12px;flex-wrap:wrap">
+      ${on ? '<button class="btn" data-sa="stop">Przerwij</button>'
+           : '<button class="btn primary" data-sa="start">Przemiataj i mierz</button>'}
+      ${a.ready && !on ? `<button class="btn" data-sa="apply"${rawTip(TIP_SA_APPLY, 'Zastosuj')}>Zastosuj ${a.best_cm} cm</button>` : ''}
+      <div class="grow"></div>
+      <span class="mono faint" style="font-size:11px">${on
+        ? `${sa.done}/${sa.total}`
+        : (sa.points ? `${sa.points} punktów, ok. ${Math.round(sa.estimate_s)} s` : '')}</span>
+    </div>
+
+    ${sa.note ? `<div class="mono faint" style="font-size:11px;margin-top:8px">${esc(sa.note)}</div>` : ''}
+    ${sa.error ? `<div class="banner bad" style="margin-top:10px"><div class="grow"><div class="d">${esc(sa.error)}</div></div></div>` : ''}
+    ${(!on && sa.original_cm != null && !sa.restored && (sa.results || []).length)
+      ? '<div class="banner bad" style="margin-top:10px"><div class="grow"><div class="d">Nastawa mogła nie wrócić na miejsce — sprawdź wartości wyżej.</div></div></div>' : ''}
+
+    ${subalignCurve(sa)}
+
+    ${a.ready ? `
+    <div class="row" style="margin-top:10px">
+      <span class="k">Najlepsza nastawa</span><span class="v mono teal">${a.best_cm} cm (${(a.best_cm / 100).toFixed(2)} m)</span>
+      <span class="k">Przesunięcie</span><span class="v mono">${a.shift_cm > 0 ? '+' : ''}${a.shift_cm} cm = ${a.shift_ms} ms = ${a.phase_at_50hz}° przy 50 Hz</span>
+      <span class="k">Zysk wobec obecnej</span><span class="v mono ${a.gain_vs_current_db > 0 ? 'teal' : ''}">${a.gain_vs_current_db != null ? (a.gain_vs_current_db > 0 ? '+' : '') + a.gain_vs_current_db + ' dB' : '—'}</span>
+      <span class="k">Rozpiętość zakresu</span><span class="v mono">${a.span_db} dB</span>
+    </div>` : ''}
+
+    <div class="faint" style="font-size:11px;margin-top:12px;line-height:1.5">
+      Oba suby dostają ten sam sygnał LFE, więc nie da się ich zmierzyć osobno — i nie trzeba.
+      Przesuwamy opóźnienie jednego z nich i patrzymy, gdzie mikrofon łapie najmocniejsze
+      sumowanie. Nastawa wraca na miejsce po każdym przemiataniu, także po błędzie:
+      zmiana na stałe to osobny przycisk.<br><br>
+      <b>Zanim uruchomisz:</b> mikrofon na wysokości uszu w miejscu odsłuchu, głośność
+      taka, żeby pomiar był słyszalny, ale bez obcięcia (patrz miernik obok).
+      Wynik jest optymalny <b>dla tego punktu</b> — przy szerokiej kanapie powtórz
+      w kilku miejscach i wybierz nastawę, która wypada dobrze wszędzie.
+    </div>
+  </div>`;
+}
+
+async function loadSubAlign() {
+  try { SUBALIGN = await api('/api/subalign'); }
+  catch (e) { SUBALIGN = { distances: {}, plan: {}, analysis: {}, error: e.message, two_subs: true }; }
+  if (TAB === 'pomiar') render();
+}
+
+async function subalignAction(action, extra) {
+  const payload = Object.assign({ action: action }, extra || {});
+  try {
+    SUBALIGN = await api('/api/subalign', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (action === 'apply') toast('Nastawa zapisana w amplitunerze', true);
+    if (TAB === 'pomiar') render();
+  } catch (e) { toast(e.message, false); loadSubAlign(); }
+}
+
+function subalignTick() {
+  clearInterval(subalignTimer);
+  subalignTimer = setInterval(async () => {
+    if (TAB !== 'pomiar' || !SUBALIGN || !SUBALIGN.running) return;
+    try { SUBALIGN = await api('/api/subalign'); render(); } catch (e) { /* cicho */ }
+  }, 1200);
+}
+
 function viewPomiar() {
   if (!MEAS) { setTimeout(loadMeasure, 0);
     return '<div class="card"><h3>POMIAR</h3><div class="dim">wczytuję…</div></div>'; }
@@ -1597,6 +1751,8 @@ function viewPomiar() {
         <h3>POZIOM Z MIKROFONU</h3>
         <div id="levelbox">${levelMeter()}</div>
       </div>
+
+      ${cardSubAlign()}
 
       <div class="card">
         <h3>SWEEP</h3>
@@ -2434,6 +2590,22 @@ function bind() {
     };
   });
   if ($('#strmeter')) streamTick();
+
+  view.querySelectorAll('[data-sa]').forEach((b) => {
+    const act = b.dataset.sa;
+    if (act === 'start') b.onclick = async () => {
+      await subalignAction('plan', {
+        span_cm: parseInt($('#saspan').value, 10),
+        step_cm: parseInt($('#sastep').value, 10),
+        f_low: parseFloat($('#salow').value),
+        f_high: parseFloat($('#sahigh').value)
+      });
+      await subalignAction('start');
+      subalignTick();
+    };
+    else if (act === 'stop') b.onclick = () => subalignAction('stop');
+    else if (act === 'apply') b.onclick = () => subalignAction('apply');
+  });
 
   // suwak głośności: w trakcie ciągnięcia tylko odczyt, komenda dopiero po puszczeniu
   const slider = $('#volslider');
