@@ -174,6 +174,9 @@ function render() {
     else if (TAB === 'audyssey') view.innerHTML = viewAudyssey();
     else if (TAB === 'glosniki') view.innerHTML = viewGlosniki();
     else if (TAB === 'konfiguracja') view.innerHTML = viewKonfiguracja();
+    else if (TAB === 'equalizer') view.innerHTML = viewEqualizer();
+    else if (TAB === 'pomiar') view.innerHTML = viewPomiar();
+    else if (TAB === 'projektor') view.innerHTML = viewProjektor();
     else if (TAB === 'konsola') view.innerHTML = viewKonsola();
     bind();
   });
@@ -755,6 +758,422 @@ function viewKonfiguracja() {
   </div>`;
 }
 
+
+/* ================= EQUALIZER PARAMETRYCZNY =================
+   Matematyka filtrów siedzi po stronie serwera (avree/eq.py), żeby ten sam
+   model obsłużył podgląd, eksport i późniejsze przetwarzanie dźwięku.
+   Tutaj tylko rysujemy i zbieramy zmiany. */
+
+let EQ = null;
+let EQ_CHANNEL = 'FL';
+let eqSaveTimer = null;
+
+async function loadEq() {
+  try {
+    EQ = await api('/api/eq');
+    if (TAB === 'equalizer') { lastSignature = ''; render(); }
+  } catch (e) { toast(e.message, false); }
+}
+
+function pushEq(immediate) {
+  clearTimeout(eqSaveTimer);
+  const send = async () => {
+    try {
+      EQ = await api('/api/eq', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ design: EQ.design })
+      });
+      lastSignature = '';
+      render();
+    } catch (e) { toast(e.message, false); }
+  };
+  if (immediate) send(); else eqSaveTimer = setTimeout(send, 140);
+}
+
+/* Rysunek: oś X logarytmiczna 10 Hz - 24 kHz, oś Y liniowa w dB. */
+const EQ_W = 900, EQ_H = 340, EQ_PAD_L = 46, EQ_PAD_B = 26, EQ_PAD_T = 12;
+const EQ_FMIN = 10, EQ_FMAX = 24000, EQ_DB = 18;
+
+const eqX = (f) => EQ_PAD_L + (Math.log10(f / EQ_FMIN) / Math.log10(EQ_FMAX / EQ_FMIN))
+                              * (EQ_W - EQ_PAD_L - 10);
+const eqY = (db) => EQ_PAD_T + ((EQ_DB - db) / (2 * EQ_DB)) * (EQ_H - EQ_PAD_T - EQ_PAD_B);
+
+function eqGraph(curve, bands) {
+  if (!curve) return '';
+  const grid = [];
+  [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000].forEach((f) => {
+    const x = eqX(f);
+    grid.push(`<line x1="${x}" y1="${EQ_PAD_T}" x2="${x}" y2="${EQ_H - EQ_PAD_B}" stroke="#1f2429"/>`);
+    grid.push(`<text x="${x}" y="${EQ_H - 8}" text-anchor="middle" fill="#5c656d"
+      font-size="10" font-family="IBM Plex Mono, monospace">${f >= 1000 ? (f / 1000) + 'k' : f}</text>`);
+  });
+  [-12, -6, 0, 6, 12].forEach((db) => {
+    const y = eqY(db);
+    grid.push(`<line x1="${EQ_PAD_L}" y1="${y}" x2="${EQ_W - 10}" y2="${y}"
+      stroke="${db === 0 ? '#2c3339' : '#1f2429'}"/>`);
+    grid.push(`<text x="${EQ_PAD_L - 8}" y="${y + 4}" text-anchor="end" fill="#5c656d"
+      font-size="10" font-family="IBM Plex Mono, monospace">${db > 0 ? '+' + db : db}</text>`);
+  });
+
+  const path = (values) => values.map((v, i) =>
+    (i ? 'L' : 'M') + eqX(curve.freqs[i]).toFixed(1) + ' ' +
+    eqY(Math.max(-EQ_DB, Math.min(EQ_DB, v))).toFixed(1)).join(' ');
+
+  const bandPaths = (curve.bands || []).map((b, i) => {
+    const active = bands[i] && bands[i].enabled;
+    return `<path d="${path(b)}" fill="none" stroke="${active ? '#e8a33d' : '#3c454d'}"
+      stroke-width="1" stroke-dasharray="3 3" opacity="${active ? .75 : .35}"/>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${EQ_W} ${EQ_H}" style="width:100%;height:100%">
+    ${grid.join('')}
+    ${bandPaths}
+    <path d="${path(curve.total)}" fill="none" stroke="#3fc0c4" stroke-width="2.4"
+          stroke-linejoin="round"/>
+  </svg>`;
+}
+
+function viewEqualizer() {
+  if (!EQ) { setTimeout(loadEq, 0); return '<div class="card"><h3>EQUALIZER</h3><div class="dim">wczytuję…</div></div>'; }
+
+  const s = STATE;
+  const design = EQ.design;
+  const ch = (design.channels || {})[EQ_CHANNEL] || { bands: [], gain: 0, enabled: true };
+  const curve = (EQ.curves || {})[EQ_CHANNEL];
+  const types = EQ.filter_types || {};
+
+  const dest = [
+    ['preview', 'Podgląd', 'Tylko rysunek na tle pomiaru. Nic nie trafia do dźwięku — służy do projektowania korekcji.'],
+    ['pc', 'Tor PC', 'Splot w strumieniu wychodzącym z komputera przez TOSLINK lub DLNA, przy Audyssey wyłączonym. Pełna kontrola nad filtrami, ale działa tylko dla dźwięku z komputera. Silnik DSP powstanie w następnej kolejności.'],
+    ['ady', 'DSP Audyssey', 'Wgranie filtrów do procesora amplitunera przez plik .ady. Działa dla każdego źródła, ale wymaga zbudowania kanału uploadu — to ostatni etap projektu.'],
+  ];
+
+  const rows = (ch.bands || []).map((b, i) => `
+    <tr>
+      <td><input type="checkbox" data-band="${i}" data-field="enabled" ${b.enabled ? 'checked' : ''}></td>
+      <td>
+        <select data-band="${i}" data-field="type" class="mini">
+          ${Object.keys(types).map((t) =>
+            `<option value="${t}" ${b.type === t ? 'selected' : ''}>${t}</option>`).join('')}
+        </select>
+      </td>
+      <td><input type="number" class="mini" data-band="${i}" data-field="freq" value="${b.freq}" step="1" min="10" max="24000"></td>
+      <td><input type="number" class="mini" data-band="${i}" data-field="gain" value="${b.gain}" step="0.5" min="-24" max="24"></td>
+      <td><input type="number" class="mini" data-band="${i}" data-field="q" value="${b.q}" step="0.1" min="0.1" max="20"></td>
+      <td class="dim" style="font-size:11px">${esc(types[b.type] || '')}</td>
+      <td><button class="btn" style="padding:3px 9px" data-delband="${i}">usuń</button></td>
+    </tr>`).join('');
+
+  return `
+  <div class="grid" style="grid-template-columns:1fr 330px">
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div class="seg">
+            ${(EQ.channels || []).map((c) =>
+              `<button class="${c === EQ_CHANNEL ? 'on' : ''}" data-eqch="${c}">${c}</button>`).join('')}
+          </div>
+          <div class="grow"></div>
+          <span class="mono faint" style="font-size:11px">
+            ${curve ? `szczyt ${curve.max_gain > 0 ? '+' : ''}${curve.max_gain} dB · dół ${curve.min_gain} dB` : ''}
+          </span>
+          <button class="pill ${design.master_enabled ? 'on' : ''}" data-eqmaster="1">
+            ${design.master_enabled ? 'Korekcja włączona' : 'Korekcja wyłączona'}
+          </button>
+        </div>
+        <div style="background:var(--sunken);border:1px solid var(--line-dim);border-radius:3px;height:340px">
+          ${eqGraph(curve, ch.bands || [])}
+        </div>
+        ${curve && curve.max_gain > 3 ? `
+        <div class="banner" style="margin-top:12px">
+          <div class="grow"><div class="t">Korekcja podbija o ${curve.max_gain} dB</div>
+          <div class="d">Przy aktywnych kolumnach PA każdy dodatni decybel skraca zapas przed
+          limiterem. Rozważ zejście poziomem kanału i cięcia zamiast podbić.</div></div>
+        </div>` : ''}
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 15px;border-bottom:1px solid var(--line)">
+          <span style="font-size:10px;letter-spacing:.16em;color:var(--faint)">PASMA &mdash; ${esc(EQ_CHANNEL)}</span>
+          <div class="grow"></div>
+          <span class="faint" style="font-size:11px">poziom kanału</span>
+          <input type="number" class="mini" id="eqchgain" value="${ch.gain}" step="0.5" min="-24" max="24" style="width:64px">
+          <button class="btn" data-addband="1">Dodaj pasmo</button>
+        </div>
+        <table>
+          <thead><tr><th style="width:34px"></th><th style="width:64px">TYP</th>
+            <th style="width:92px">CZĘSTOTLIWOŚĆ</th><th style="width:80px">WZMOCNIENIE</th>
+            <th style="width:70px">Q</th><th>OPIS</th><th style="width:60px"></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="7" class="dim" style="padding:16px 15px">brak pasm — dodaj pierwsze</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="card">
+        <h3>DOKĄD TRAFIAJĄ FILTRY</h3>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${dest.map(([code, label, tip]) => `
+            <button class="pill ${design.destination === code ? 'on' : ''}" data-eqdest="${code}"
+                    ${rawTip(tip, label.toUpperCase())}>
+              <div style="font-size:13px">${label}</div>
+            </button>`).join('')}
+        </div>
+        ${design.destination !== 'preview' ? `
+        <div class="banner" style="margin-top:11px">
+          <div class="grow"><div class="d" style="color:#c9a370">
+          Ta droga nie jest jeszcze podłączona do dźwięku. Projekt filtrów zapisuje się
+          normalnie i będzie gotowy, gdy silnik ruszy.</div></div>
+        </div>` : ''}
+      </div>
+
+      <div class="card">
+        <h3>EQUALIZER W AMPLITUNERZE</h3>
+        <div class="row" style="margin-bottom:11px">
+          <span class="k">Graphic EQ</span>
+          <span class="v ${s.graphic_eq ? 'amber' : 'dim'}">${s.graphic_eq == null ? '—' : (s.graphic_eq ? 'włączony' : 'wyłączony')}</span>
+          <span class="k">MultEQ</span>
+          <span class="v ${s.multeq === 'OFF' ? 'dim' : 'teal'}">${esc(s.multeq_label || '—')}</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="pill center ${s.graphic_eq ? 'warn-on' : ''}" style="flex-grow:1" data-geq="1">Włącz</button>
+          <button class="pill center ${s.graphic_eq === false ? 'on' : ''}" style="flex-grow:1" data-geq="0">Wyłącz</button>
+        </div>
+        <div class="faint" style="font-size:11px;margin-top:11px;line-height:1.5">
+          Sprawdzone na Twoim egzemplarzu: <span class="mono">PSGEQ ON</span> przechodzi
+          <b>tylko przy wyłączonym Audyssey</b> — oba equalizery wykluczają się wzajemnie.
+          Włączenie tutaj wysyła najpierw <span class="mono">PSMULTEQ:OFF</span>.
+          <br><br>
+          Wartości dziewięciu pasm <b>nie są adresowalne po sieci</b> — przetestowałem
+          pięć składni, wszystkie milczą. Suwaki istnieją wyłącznie w menu ekranowym.
+          Dlatego powyżej jest własny equalizer, a nie pilot do tamtego.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>CZEGO X3300W NIE MA</h3>
+        <div class="faint" style="font-size:11px;line-height:1.6">
+          <b style="color:#9aa3ab">Trybu MultEQ „Manual"</b> — Deviceinfo.xml wymienia tylko
+          Reference, L/R Bypass, Flat i Off. Komenda <span class="mono">PSMULTEQ:MANUAL</span>
+          jest odrzucana.<br><br>
+          <b style="color:#9aa3ab">Audyssey LFC</b> i <b style="color:#9aa3ab">Containment Amount</b>
+          — <span class="mono">PSLFC</span> i <span class="mono">PSCNTAMT</span> milczą.
+          To funkcje wyższych modeli.<br><br>
+          <b style="color:#9aa3ab">Audyssey DSX</b> — <span class="mono">PSDSX</span>,
+          <span class="mono">PSSTW</span>, <span class="mono">PSSTH</span> milczą.
+          Wycofane wraz z wejściem Atmosa.
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ================= MODUŁ POMIAROWY ================= */
+
+function viewPomiar() {
+  return `
+  <div class="banner">
+    <div class="grow">
+      <div class="t">Szkielet modułu — silnik pomiarowy powstaje w następnej kolejności</div>
+      <div class="d">Okna i funkcje są rozstawione, parametry zapisują się. Brakuje samego
+      przetwarzania sygnału: generatora sweepu, dekonwolucji i uśredniania. To dokładka
+      <span class="mono">numpy</span>, <span class="mono">scipy</span> i
+      <span class="mono">sounddevice</span> — jedyne zależności zewnętrzne w całym projekcie.</div>
+    </div>
+  </div>
+
+  <div class="grid" style="grid-template-columns:340px 1fr">
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <div class="card">
+        <h3>TOR POMIAROWY</h3>
+        <div class="setup-row">
+          <div style="font-size:12px">Mikrofon</div>
+          <div class="seg"><button class="on">ECM8000</button><button>Denon</button></div>
+          <div></div>
+        </div>
+        <div class="setup-row">
+          <div style="font-size:12px">Interfejs</div>
+          <div class="mono dim" style="font-size:11px">ESI U24 XL &middot; ASIO</div>
+          <div></div>
+        </div>
+        <div class="setup-row">
+          <div style="font-size:12px">Phantom</div>
+          <div class="mono dim" style="font-size:11px">z miksera, kanał L</div>
+          <div></div>
+        </div>
+        <div class="setup-row">
+          <div style="font-size:12px">Pętla odniesienia</div>
+          <div class="mono amber" style="font-size:11px">wyjście analog &rarr; wejście R</div>
+          <div></div>
+        </div>
+        <div class="setup-row">
+          <div style="font-size:12px">Wyjście do AVR</div>
+          <div class="seg"><button class="on">TOSLINK</button><button>HDMI</button><button>DLNA</button></div>
+          <div></div>
+        </div>
+        <div class="faint" style="font-size:11px;margin-top:11px;line-height:1.5">
+          TOSLINK jest izolowany optycznie, więc pętla masy nie ma jak powstać — ale jest stereo.
+          Tą drogą zmierzymy przednie L/R i oba subwoofery. Centralny i surroundy wymagają
+          HDMI podłączonego na czas pomiaru.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>SWEEP</h3>
+        <div class="setup-row">
+          <div style="font-size:12px">Zakres</div>
+          <div class="mono" style="font-size:12px">10 Hz &ndash; 24 kHz</div><div></div>
+        </div>
+        <div class="setup-row">
+          <div style="font-size:12px">Długość</div>
+          <div class="seg"><button>256k</button><button class="on">512k</button><button>1M</button></div>
+          <div></div>
+        </div>
+        <div class="setup-row">
+          <div style="font-size:12px">Poziom</div>
+          <div class="mono" style="font-size:12px">&minus;12 dBFS</div><div></div>
+        </div>
+        <div class="setup-row">
+          <div style="font-size:12px">Powtórzenia</div>
+          <div class="seg"><button>1</button><button class="on">2</button><button>4</button></div>
+          <div></div>
+        </div>
+        <div class="faint" style="font-size:11px;margin-top:11px;line-height:1.5">
+          Sweep logarytmiczny metodą Fariny: filtr odwrotny to ten sam przebieg odwrócony
+          w czasie z korekcją &minus;6 dB na oktawę. Splot przez FFT daje odpowiedź impulsową,
+          a zniekształcenia harmoniczne lądują przed nią i dają się odciąć oknem.
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <div class="card" style="flex-grow:1;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600">Pomiar</div>
+          <div class="grow"></div>
+          <span class="faint" style="font-size:11px">brak danych — nic jeszcze nie zmierzono</span>
+        </div>
+        <div style="flex-grow:1;min-height:300px;background:var(--sunken);border:1px solid var(--line-dim);
+                    border-radius:3px;display:flex;align-items:center;justify-content:center">
+          <div style="text-align:center;color:var(--ghost);font-size:12px;line-height:1.7">
+            tu wyląduje odpowiedź częstotliwościowa i impulsowa<br>
+            zmierzona, cel, po korekcji
+          </div>
+        </div>
+        <div style="display:flex;gap:7px;margin-top:12px">
+          <button class="btn" disabled style="opacity:.45;cursor:default">Zmierz kanał</button>
+          <button class="btn" disabled style="opacity:.45;cursor:default">Zmierz wszystkie</button>
+          <button class="btn" disabled style="opacity:.45;cursor:default">Oblicz filtry</button>
+          <div class="grow"></div>
+          <button class="btn" disabled style="opacity:.45;cursor:default">Eksport .ady</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>ANALIZA I OGRANICZENIA OPTYMALIZATORA</h3>
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <div class="setup-row">
+              <div style="font-size:12px">Górna granica korekcji</div>
+              <div class="seg"><button>300</button><button>1k</button><button class="on">5k</button><button>20k</button></div>
+              <div></div>
+            </div>
+            <div class="setup-row">
+              <div style="font-size:12px">Wygładzanie</div>
+              <div class="seg"><button>1/24</button><button class="on">zmienne</button><button>1/3</button></div>
+              <div></div>
+            </div>
+            <div class="setup-row">
+              <div style="font-size:12px">Uśrednianie pozycji</div>
+              <div class="seg"><button class="on">auto</button><button>wektorowe</button><button>mocy</button></div>
+              <div></div>
+            </div>
+            <div class="setup-row">
+              <div style="font-size:12px">Maks. podbicie</div>
+              <div class="seg"><button class="on">0 dB</button><button>+3</button><button>+6</button></div>
+              <div></div>
+            </div>
+            <div class="setup-row">
+              <div style="font-size:12px">Maks. Q</div>
+              <div class="seg"><button>4</button><button class="on">8</button><button>16</button></div>
+              <div></div>
+            </div>
+          </div>
+          <div class="faint" style="font-size:11.5px;line-height:1.65">
+            <b style="color:#e8a33d">Dlaczego nie korygujemy wszystkiego do 20 kHz</b><br><br>
+            Poniżej częstotliwości przejścia pomieszczenie zachowuje się modalnie: odpowiedź jest
+            podobna w całej strefie odsłuchu i powtarzalna, więc korekcja ma sens.<br><br>
+            Wyżej dominuje filtrowanie grzebieniowe od odbić. Przesuń mikrofon o kilka centymetrów,
+            a wszystkie szczyty i doliny wylądują gdzie indziej. Korygowanie tego z jednego punktu
+            to dopasowywanie się do szumu — w innym miejscu kanapy wyjdzie gorzej niż przed korekcją.<br><br>
+            <b style="color:#9aa3ab">Ale granica nie jest sztywna.</b> Uśrednienie wielu pozycji
+            i wygładzanie zmienne zostawiają to, co jest wspólne dla całej strefy — czyli własną
+            charakterystykę kolumny i szerokie tendencje pomieszczenia — a kasują to, co lokalne.
+            Na tym, co zostanie, można pracować i wyżej.<br><br>
+            <b style="color:#9aa3ab">Twarde kryterium</b> to minimalnofazowość. Rezonans modalny
+            jest minimalnofazowy i equalizer go odwraca. Odbicie nie jest — żaden filtr go nie usunie,
+            bo to opóźniona kopia, a nie zmiana barwy. Porównanie fazy zmierzonej z minimalnofazową
+            wyliczoną z amplitudy pokazuje czarno na białym, co wolno ruszać.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ================= RZUTNIK ================= */
+
+function viewProjektor() {
+  return `
+  <div class="banner">
+    <div class="grow">
+      <div class="t">Miejsce zarezerwowane</div>
+      <div class="d">Rzutnik został znaleziony w sieci. Sterowanie dojdzie w kolejnej sesji —
+      potrzebny jest keycode z menu urządzenia.</div>
+    </div>
+  </div>
+
+  <div class="grid" style="grid-template-columns:1fr 1fr">
+    <div class="card">
+      <h3>CO WIADOMO</h3>
+      <div class="row">
+        <span class="k">Adres</span><span class="v teal">192.168.0.70</span>
+        <span class="k">MAC</span><span class="v">98:93:CC:8D:32:76</span>
+        <span class="k">Producent</span><span class="v">LG</span>
+        <span class="k">Model</span><span class="v">CineBeam DBU510RG</span>
+        <span class="k">Port 9741</span><span class="v teal">otwarty</span>
+        <span class="k">Porty 3000/3001</span><span class="v dim">zamknięte</span>
+      </div>
+      <div class="faint" style="font-size:11px;margin-top:12px;line-height:1.5">
+        Port przyjmuje połączenia i milczy — tak zachowuje się szyfrowane IP Control.
+        Porty webOS są zamknięte prawdopodobnie dlatego, że rzutnik był w czuwaniu
+        podczas skanowania.
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>CZEGO POTRZEBA</h3>
+      <div style="font-size:12px;line-height:1.7;color:#9aa3ab">
+        <b style="color:var(--amber)">1.</b> Włącz rzutnik i uruchom ponowny skan —
+        sprawdzimy, czy otworzą się porty webOS. Dają znacznie bogatsze sterowanie:
+        wejścia, aplikacje, wyłączanie, wskaźnik.<br><br>
+        <b style="color:var(--amber)">2.</b> W menu rzutnika znajdź
+        <span class="mono">Ustawienia &rarr; Sieć &rarr; Sterowanie IP</span>
+        i wygeneruj keycode.<br><br>
+        <b style="color:var(--amber)">3.</b> LG IP Control to AES-128 po TCP,
+        z kluczem wyprowadzonym z keycode przez PBKDF2. Zaimplementowanie tego
+        to jeden moduł.
+      </div>
+      <div style="display:flex;gap:7px;margin-top:14px">
+        <button class="btn" data-act="scan">Szukaj urządzeń w sieci</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ---------- widok: Konsola ---------- */
 
 let LOG = [];
@@ -898,6 +1317,48 @@ function bind() {
     b.onclick = () => cmd('subwoofer', b.dataset.swr === '1'));
   view.querySelectorAll('[data-osd]').forEach((b) =>
     b.onclick = () => cmd('osd', b.dataset.osd));
+  // --- equalizer
+  view.querySelectorAll('[data-eqch]').forEach((b) =>
+    b.onclick = () => { EQ_CHANNEL = b.dataset.eqch; lastSignature = ''; render(); });
+  view.querySelectorAll('[data-eqdest]').forEach((b) =>
+    b.onclick = () => { EQ.design.destination = b.dataset.eqdest; pushEq(true); });
+  view.querySelectorAll('[data-eqmaster]').forEach((b) =>
+    b.onclick = () => { EQ.design.master_enabled = !EQ.design.master_enabled; pushEq(true); });
+  view.querySelectorAll('[data-addband]').forEach((b) =>
+    b.onclick = () => {
+      const ch = EQ.design.channels[EQ_CHANNEL] ||
+                 (EQ.design.channels[EQ_CHANNEL] = { channel: EQ_CHANNEL, bands: [], gain: 0, enabled: true });
+      ch.bands.push({ freq: 100, gain: -3, q: 4, type: 'PK', enabled: true });
+      pushEq(true);
+    });
+  view.querySelectorAll('[data-delband]').forEach((b) =>
+    b.onclick = () => {
+      EQ.design.channels[EQ_CHANNEL].bands.splice(parseInt(b.dataset.delband, 10), 1);
+      pushEq(true);
+    });
+  view.querySelectorAll('[data-band]').forEach((el) => {
+    const apply = () => {
+      const band = EQ.design.channels[EQ_CHANNEL].bands[parseInt(el.dataset.band, 10)];
+      const f = el.dataset.field;
+      band[f] = (f === 'enabled') ? el.checked
+              : (f === 'type') ? el.value
+              : parseFloat(el.value || 0);
+      pushEq(f === 'enabled' || f === 'type');
+    };
+    if (el.tagName === 'SELECT' || el.type === 'checkbox') el.onchange = apply;
+    else el.oninput = apply;
+  });
+  const chgain = $('#eqchgain');
+  if (chgain) chgain.oninput = () => {
+    EQ.design.channels[EQ_CHANNEL].gain = parseFloat(chgain.value || 0);
+    pushEq();
+  };
+  view.querySelectorAll('[data-geq]').forEach((b) =>
+    b.onclick = () => cmd('graphic_eq', b.dataset.geq === '1')
+      .then(() => toast(b.dataset.geq === '1'
+        ? 'Graphic EQ włączony — Audyssey musiał zostać wyłączony'
+        : 'Graphic EQ wyłączony', true)));
+
   view.querySelectorAll('[data-connect]').forEach((b) =>
     b.onclick = () => connectTo(b.dataset.connect));
   view.querySelectorAll('[data-pwr]').forEach((b) =>

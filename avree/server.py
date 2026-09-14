@@ -11,12 +11,13 @@ import mimetypes
 import os
 import secrets
 import threading
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from . import discovery, upnp
+from . import discovery, eq, upnp
 from .avr import (
     CROSSOVER_FREQS,
     MODE_CATEGORIES,
@@ -65,6 +66,7 @@ class App:
         # Wynik ostatniego szukania w sieci - interfejs pyta o niego osobno,
         # bo skan podsieci potrafi trwać kilkanaście sekund.
         self.scan: dict[str, Any] = {"running": False, "found": [], "note": ""}
+        self.eq = eq.load()
 
     def ensure_renderer(self) -> upnp.Renderer | None:
         if self.renderer is None and self.renderer_error is None:
@@ -140,6 +142,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(self._renderer_payload())
         elif route == "/api/scan":
             self._json(self.app.scan)
+        elif route == "/api/eq":
+            self._json(self._eq_payload())
         elif route.startswith("/media/"):
             self._serve_media(route[len("/media/"):])
         else:
@@ -232,6 +236,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(self._start_scan())
             elif route == "/api/connect":
                 self._json(self._connect(body))
+            elif route == "/api/eq":
+                self._json(self._eq_save(body))
             else:
                 self.send_error(404)
         except (DenonTelnetError, upnp.UpnpError, ValueError) as e:
@@ -293,6 +299,19 @@ class Handler(BaseHTTPRequestHandler):
         elif action == "subwoofer":
             avr.set_subwoofer(bool(value))
 
+        # --- equalizer graficzny amplitunera
+        #
+        # Ustalone pomiarowo: PSGEQ przyjmuje ON tylko przy PSMULTEQ:OFF.
+        # Wysyłamy więc obie komendy, żeby przełącznik w interfejsie
+        # nie wyglądał na zepsuty.
+        elif action == "graphic_eq":
+            if value:
+                avr.set_multeq("OFF")
+                time.sleep(0.25)
+                avr.send("PSGEQ ON")
+            else:
+                avr.send("PSGEQ OFF")
+
         # --- menu ekranowe (jedyna droga do uruchomienia kalibracji Audyssey)
         elif action == "osd":
             avr.osd(str(value))
@@ -342,6 +361,30 @@ class Handler(BaseHTTPRequestHandler):
             "size": path.stat().st_size, "url": url,
         }
         return {"ok": True, "now_playing": self.app.now_playing}
+
+    # ---- equalizer parametryczny ---------------------------------------
+
+    def _eq_payload(self) -> dict[str, Any]:
+        design = self.app.eq
+        freqs = eq.log_freqs()
+        curves = {
+            name: eq.channel_response(ch, freqs)
+            for name, ch in design.channels.items()
+        }
+        return {
+            "design": design.to_dict(),
+            "curves": curves,
+            "filter_types": eq.FILTER_TYPES,
+            "channels": eq.EQ_CHANNELS,
+        }
+
+    def _eq_save(self, body: dict[str, Any]) -> dict[str, Any]:
+        design = eq.EqDesign.from_dict(body.get("design") or {})
+        self.app.eq = design
+        eq.save(design)
+        payload = self._eq_payload()
+        payload["ok"] = True
+        return payload
 
     # ---- wyszukiwanie i przepinanie amplitunera ------------------------
 

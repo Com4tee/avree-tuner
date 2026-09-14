@@ -116,7 +116,9 @@ class Avr:
             "mute": None, "source": None, "surround": None,
             "input_mode": None, "input_signal": None, "sample_rate": None,
             "multeq": None, "dynamic_eq": None, "dynamic_volume": None,
-            "reference_level": None,
+            "reference_level": None, "graphic_eq": None, "cinema_eq": None,
+            "loudness_management": None, "dialog_control": None,
+            "room_size": None, "neural": None, "effect_level": None,
             "channel_levels": {}, "setup_levels": {}, "sub_levels": {},
             "speakers": {}, "crossovers": {},
             "subwoofer_mode": None, "lfe_lowpass": None, "crossover_mode": None,
@@ -235,6 +237,20 @@ class Avr:
             s["dynamic_volume"] = line[9:].strip()
         elif line.startswith("PSREFLEV "):
             s["reference_level"] = line[9:].strip()
+        elif line.startswith("PSGEQ "):
+            s["graphic_eq"] = line[6:].strip() == "ON"
+        elif line.startswith("PSCINEMA EQ."):
+            s["cinema_eq"] = line[12:].strip() == "ON"
+        elif line.startswith("PSLOM "):
+            s["loudness_management"] = line[6:].strip() == "ON"
+        elif line.startswith("PSDIC "):
+            s["dialog_control"] = line[6:].strip()
+        elif line.startswith("PSRSZ "):
+            s["room_size"] = line[6:].strip()
+        elif line.startswith("PSNEURAL "):
+            s["neural"] = line[9:].strip() == "ON"
+        elif line.startswith("PSEFF "):
+            s["effect_level"] = line[6:].strip()
 
         # --- poziomy kanałów (CV = bieżące, SSLEV = z konfiguracji)
         elif line.startswith("CV") and line != "CVEND":
@@ -365,6 +381,8 @@ class Avr:
         """Pełne odpytanie - po połączeniu i na żądanie z interfejsu."""
         for q in ("PW?", "ZM?", "MV?", "MU?", "SI?", "MS?", "SD?",
                   "PSMULTEQ: ?", "PSDYNEQ ?", "PSDYNVOL ?", "PSREFLEV ?",
+                  "PSGEQ ?", "PSCINEMA EQ. ?", "PSLOM ?", "PSDIC ?",
+                  "PSRSZ ?", "PSNEURAL ?", "PSEFF ?", "PSDRC ?",
                   "CV?", "PSSWL ?", "SSLEV ?", "SSSPC ?", "SSCFR ?", "SSSWM ?", "SSLFL ?",
                   "SSPAA ?", "SSINFAISSIG ?", "SSINFAISFSV ?",
                   "SSINFFRM ?", "NSFRN ?", "VIALL?", "SSFUN ?", "SSSOD ?"):

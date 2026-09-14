@@ -81,3 +81,49 @@ Potwierdza `MultEQ XT32`.
 
 To jest samoopisujący się model urządzenia — GUI powinno budować się z niego,
 a nie z zaszytych na sztywno list.
+
+## Equalizer graficzny — ustalenia
+
+`PSGEQ ON/OFF` **działa**, ale wyłącznie przy `PSMULTEQ:OFF`. Wysłanie `PSGEQ ON`
+przy włączonym Audyssey nie daje żadnego efektu — oba equalizery wykluczają się
+wzajemnie. Kolejność, która przechodzi:
+
+```
+PSMULTEQ:OFF     ->  PSMULTEQ:OFF
+PSGEQ ON         ->  PSGEQ ON
+```
+
+**Wartości dziewięciu pasm nie są adresowalne po sieci.** Przetestowane i milczące:
+`PSGEQFL63`, `SSGEQFL63`, `PSGEQ FL 63`, `SSGEQFL 63`, `PSGEQ6355`, a także zapytania
+`SSGEQ ?`, `PSGEQFL ?`, `SSEQ ?`, `PSEQ ?`, `SSAEQ ?`, `PSGEQ:?`. Suwaki istnieją
+wyłącznie w menu ekranowym.
+
+Trybu `PSMULTEQ:MANUAL` ten model nie ma — Deviceinfo.xml wymienia tylko Reference,
+L/R Bypass, Flat i Off, a komenda jest odrzucana.
+
+## Pełna enumeracja ustawień (65 kandydatów, 40 odpowiada)
+
+Odpowiadają i są sterowalne:
+
+```
+PSMULTEQ:  PSDYNEQ  PSDYNVOL  PSREFLEV      Audyssey
+PSGEQ                                       equalizer graficzny (ON tylko przy MultEQ OFF)
+PSCINEMA EQ.  PSCES  PSLOM  PSNEURAL        parametry przestrzenne
+PSDRC  PSDCO  PSEFF  PSRSZ  PSDEL           dynamika, efekt, rozmiar pomieszczenia
+PSBAS  PSTRE  PSTONE CTRL                   barwa
+PSLFE  PSDIL  PSDIC  PSSWL  PSSWR  PSCLV    poziomy
+SSSPC  SSCFR  SSSWM  SSLFL  SSLEV  CV  SSPAA  konfiguracja głośników
+SSAST  SSLAN  SSLOC  SSHOS  SSSMG  SSQSNZMA   system
+SSINFAISSIG  SSINFAISFSV  SSINFFRM  VIALL  NSFRN   informacje
+```
+
+Milczą — tych funkcji X3300W nie ma:
+
+```
+PSLFC  PSCNTAMT           Audyssey LFC i Containment Amount (wyższe modele)
+PSDSX  PSSTW  PSSTH  PSDEH   Audyssey DSX (wycofane wraz z Atmosem)
+SSDST                     odległości głośników
+PSMDAX  PSATT  PSPHG  PSSP:  PSVOL
+SSGEQ i pochodne          pasma equalizera graficznego
+SSSPDIF  SSBAS  SSECO  SSTPD  SSTRG
+```

@@ -214,3 +214,13 @@ button[data-tip], .pill[data-tip] { cursor: pointer; }
 }
 .osd-pad button:hover { color: var(--text); border-color: var(--ghost); }
 .osd-pad button.mid { background: #1f2a2b; border-color: var(--teal); color: var(--teal); font-size: 11px; font-weight: 600; }
+
+/* --- drobne pola w tabeli equalizera --- */
+.mini {
+  width: 100%; padding: 5px 7px; font-size: 11.5px;
+  background: var(--sunken); border: 1px solid var(--line); border-radius: 3px;
+  color: var(--text); font-family: var(--mono);
+}
+select.mini { font-family: 'IBM Plex Sans', system-ui, sans-serif; cursor: pointer; }
+input[type=checkbox] { accent-color: var(--teal); cursor: pointer; }
+tbody td { vertical-align: middle; }
