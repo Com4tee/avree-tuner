@@ -1106,6 +1106,182 @@ function levelMeter() {
     </div>`;
 }
 
+let OPT = null;
+let OPT_LIMITS = { f_low: 20, f_high: 300, max_boost_db: 0, max_cut_db: 12,
+                   max_q: 8, max_bands: 8 };
+let OPT_TILT = 0;
+
+function optimise() {
+  return measAct('optimise', { channel: MEAS_CHANNEL, constraints: OPT_LIMITS,
+                               tilt: OPT_TILT })
+    .then((r) => { OPT = r; lastSignature = ''; render();
+                   toast(`Dobrano ${r.bands.length} filtrów`, true); });
+}
+
+/* Wykres optymalizacji: przed, cel, po korekcji i sama krzywa filtrów. */
+function optimChart() {
+  if (!OPT || !OPT.curves) return '';
+  const c = OPT.curves;
+  const H = 260, L = 48, B = 24, T = 10, W = 980;
+  const all = c.before.concat(c.after, c.target);
+  let lo = Math.floor((Math.min(...all) - 4) / 5) * 5;
+  let hi = Math.ceil((Math.max(...all) + 4) / 5) * 5;
+  const x = (f) => L + (Math.log10(f / 15) / Math.log10(22000 / 15)) * (W - L - 12);
+  const y = (db) => T + ((hi - db) / (hi - lo)) * (H - T - B);
+
+  const grid = [];
+  [20, 50, 100, 200, 500, 1000, 5000, 20000].forEach((f) => {
+    grid.push(`<line x1="${x(f)}" y1="${T}" x2="${x(f)}" y2="${H - B}" stroke="#1f2429"/>`);
+    grid.push(`<text x="${x(f)}" y="${H - 7}" text-anchor="middle" fill="#5c656d"
+      font-size="10" font-family="IBM Plex Mono, monospace">${f >= 1000 ? f / 1000 + 'k' : f}</text>`);
+  });
+  for (let db = lo; db <= hi; db += 5) {
+    grid.push(`<line x1="${L}" y1="${y(db)}" x2="${W - 12}" y2="${y(db)}" stroke="#1f2429"/>`);
+    grid.push(`<text x="${L - 7}" y="${y(db) + 4}" text-anchor="end" fill="#5c656d"
+      font-size="10" font-family="IBM Plex Mono, monospace">${db}</text>`);
+  }
+  // Zakres korekcji na tle, żeby było widać, gdzie optymalizator pracował.
+  const shade = `<rect x="${x(OPT_LIMITS.f_low)}" y="${T}"
+    width="${x(OPT_LIMITS.f_high) - x(OPT_LIMITS.f_low)}" height="${H - T - B}"
+    fill="#3fc0c4" opacity=".045"/>`;
+
+  const line = (vals, color, width, dash) =>
+    `<path d="${c.freqs.map((f, i) => (i ? 'L' : 'M') + x(f).toFixed(1) + ' '
+      + y(vals[i]).toFixed(1)).join(' ')}" fill="none" stroke="${color}"
+      stroke-width="${width}" ${dash ? `stroke-dasharray="${dash}"` : ''}
+      stroke-linejoin="round"/>`;
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px">
+    ${grid.join('')}${shade}
+    ${line(c.target, '#e8a33d', 1.4, '5 4')}
+    ${line(c.before, '#79838d', 1.6)}
+    ${line(c.after, '#3fc0c4', 2.6)}
+  </svg>`;
+}
+
+function optimPanel() {
+  const info = ((MEAS && MEAS.channels) || []).find((c) => c.code === MEAS_CHANNEL);
+  const hasData = info && info.positions.length;
+
+  const seg = (key, values, unit) => `
+    <div class="seg">
+      ${values.map((v) => `<button class="${OPT_LIMITS[key] === v ? 'on' : ''}"
+          data-optlim="${key}" data-val="${v}">${v}${unit || ''}</button>`).join('')}
+    </div>`;
+
+  const r = OPT && OPT.result;
+
+  return `
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <h3 style="margin:0">OPTYMALIZATOR FILTRÓW</h3>
+      <div class="grow"></div>
+      <button class="btn primary" data-optrun="1" ${hasData ? '' : 'disabled style="opacity:.45"'}>
+        ${hasData ? 'Dobierz filtry dla ' + esc(MEAS_CHANNEL) : 'najpierw zmierz kanał'}
+      </button>
+    </div>
+
+    <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 22px">
+      <div class="setup-row" style="grid-template-columns:150px 1fr">
+        <div style="font-size:12px">Zakres od</div>${seg('f_low', [15, 20, 30, 40], ' Hz')}
+      </div>
+      <div class="setup-row" style="grid-template-columns:150px 1fr">
+        <div style="font-size:12px">Zakres do</div>${seg('f_high', [150, 300, 500, 1000, 5000], '')}
+      </div>
+      <div class="setup-row" style="grid-template-columns:150px 1fr">
+        <div style="font-size:12px">Maks. podbicie</div>${seg('max_boost_db', [0, 3, 6], ' dB')}
+      </div>
+      <div class="setup-row" style="grid-template-columns:150px 1fr">
+        <div style="font-size:12px">Maks. cięcie</div>${seg('max_cut_db', [6, 12, 18], ' dB')}
+      </div>
+      <div class="setup-row" style="grid-template-columns:150px 1fr">
+        <div style="font-size:12px">Maks. dobroć</div>${seg('max_q', [4, 8, 16], '')}
+      </div>
+      <div class="setup-row" style="grid-template-columns:150px 1fr">
+        <div style="font-size:12px">Liczba filtrów</div>${seg('max_bands', [4, 6, 8, 12], '')}
+      </div>
+    </div>
+
+    ${OPT_LIMITS.max_boost_db > 0 ? `
+    <div class="banner" style="margin-top:12px"><div class="grow">
+      <div class="t">Podbijanie jest włączone</div>
+      <div class="d">Każdy dodatni decybel skraca zapas przed limiterem kolumn.
+      Przy aktywnych PA rozważ zero i nadrobienie poziomu trymem kanału.</div>
+    </div></div>` : ''}
+
+    ${r ? `
+    <div style="margin-top:14px;background:var(--sunken);border:1px solid var(--line-dim);
+                border-radius:3px;padding:8px">
+      ${optimChart()}
+      <div style="display:flex;gap:16px;justify-content:center;margin-top:4px">
+        <span class="faint" style="font-size:11px">
+          <span style="display:inline-block;width:14px;height:2px;background:#79838d"></span> przed</span>
+        <span class="faint" style="font-size:11px">
+          <span style="display:inline-block;width:14px;height:2px;background:#e8a33d"></span> cel</span>
+        <span class="faint" style="font-size:11px">
+          <span style="display:inline-block;width:14px;height:3px;background:var(--teal)"></span> po korekcji</span>
+      </div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-top:14px">
+      <div class="card" style="padding:10px 12px">
+        <div class="faint" style="font-size:10px;letter-spacing:.14em">ODCHYŁKA</div>
+        <div class="mono" style="font-size:16px;margin-top:5px">
+          ${r.before_db} → <span class="teal">${r.after_db}</span> dB</div>
+      </div>
+      <div class="card" style="padding:10px 12px">
+        <div class="faint" style="font-size:10px;letter-spacing:.14em">ROZRZUT</div>
+        <div class="mono" style="font-size:16px;margin-top:5px">
+          ${r.std_before} → <span class="teal">${r.std_after}</span> dB</div>
+      </div>
+      <div class="card" style="padding:10px 12px">
+        <div class="faint" style="font-size:10px;letter-spacing:.14em">MAKS. PODBICIE</div>
+        <div class="mono ${r.total_boost_db > 0 ? 'amber' : 'teal'}"
+             style="font-size:16px;margin-top:5px">${r.total_boost_db > 0 ? '+' : ''}${r.total_boost_db} dB</div>
+      </div>
+      <div class="card" style="padding:10px 12px">
+        <div class="faint" style="font-size:10px;letter-spacing:.14em">PROPONOWANY TRYM</div>
+        <div class="mono" style="font-size:16px;margin-top:5px">
+          ${r.suggested_trim_db > 0 ? '+' : ''}${r.suggested_trim_db} dB</div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:3px">
+      <table>
+        <thead><tr><th>#</th><th>CZĘSTOTLIWOŚĆ</th><th>WZMOCNIENIE</th><th>DOBROĆ</th>
+          <th>ODCHYŁKA PRZED</th><th>ZOSTAŁO PO KROKU</th></tr></thead>
+        <tbody>
+          ${(OPT.steps || []).map((s, i) => `<tr>
+            <td class="faint">${i + 1}</td>
+            <td class="mono">${s.freq} Hz</td>
+            <td class="mono ${s.gain < 0 ? 'teal' : 'amber'}">${s.gain > 0 ? '+' : ''}${s.gain} dB</td>
+            <td class="mono">${s.q}</td>
+            <td class="mono dim">${s.deviation_before > 0 ? '+' : ''}${s.deviation_before} dB</td>
+            <td class="mono dim">${s.residual_max} dB</td>
+          </tr>`).join('') || '<tr><td colspan="6" class="dim" style="padding:14px">nic do poprawienia w tym zakresie</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+      <span class="faint" style="font-size:11px;flex-grow:1">
+        Filtry trafią do projektu equalizera, gdzie można je obejrzeć i poprawić ręcznie.
+        Nic nie idzie jeszcze do dźwięku.
+      </span>
+      <button class="btn primary" data-optapply="1"
+              ${OPT.bands.length ? '' : 'disabled style="opacity:.45"'}>
+        Przenieś do equalizera</button>
+    </div>
+    ` : `<div class="faint" style="font-size:11px;margin-top:12px;line-height:1.55">
+      Optymalizator pracuje na krzywej uśrednionej po pozycjach i wygładzonej zmiennie.
+      Na surowym pomiarze z jednego punktu goniłby filtrowanie grzebieniowe, które
+      kilka centymetrów dalej wygląda zupełnie inaczej.<br><br>
+      Metoda jest zachłanna: znajdź największe odchylenie, dopasuj filtr, odejmij,
+      powtórz. Dzięki temu w tabeli widać, skąd wziął się każdy filtr.
+    </div>`}
+  </div>`;
+}
+
 function viewPomiar() {
   if (!MEAS) { setTimeout(loadMeasure, 0);
     return '<div class="card"><h3>POMIAR</h3><div class="dim">wczytuję…</div></div>'; }
@@ -1253,6 +1429,8 @@ function viewPomiar() {
         </div>
         ${st.error ? `<div class="red" style="font-size:11px;margin-top:9px">${esc(st.error)}</div>` : ''}
       </div>
+
+      ${optimPanel()}
     </div>
   </div>`;
 }
@@ -2047,6 +2225,19 @@ function bind() {
     });
   view.querySelectorAll('[data-switch]').forEach((b) =>
     b.onclick = () => cmd('switch', b.dataset.value, { control: b.dataset.switch }));
+
+  // --- optymalizator
+  view.querySelectorAll('[data-optlim]').forEach((b) =>
+    b.onclick = () => { OPT_LIMITS[b.dataset.optlim] = parseFloat(b.dataset.val);
+                        lastSignature = ''; render(); });
+  view.querySelectorAll('[data-optrun]').forEach((b) =>
+    b.onclick = () => optimise());
+  view.querySelectorAll('[data-optapply]').forEach((b) =>
+    b.onclick = () => measAct('apply_eq', {
+      channel: OPT.channel, bands: OPT.bands,
+      trim: OPT.result ? OPT.result.suggested_trim_db : 0
+    }).then((r) => { toast(`Przeniesiono ${r.bands} filtrów do equalizera`, true);
+                     EQ = null; }));
 
   // --- pomiar
   view.querySelectorAll('[data-measch]').forEach((b) =>

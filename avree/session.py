@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import audio, measure
+from . import audio, measure, optimize
 
 # Kanały, które umiemy zaadresować, i ich indeks w strumieniu wielokanałowym.
 # Kolejność Windows dla 5.1: FL, FR, FC, LFE, BL, BR.
@@ -236,6 +236,46 @@ class MeasureSession:
             else:
                 self.measurements = []
             return {"ok": True, "count": len(self.measurements)}
+
+    # ---- optymalizacja ----
+
+    def optimise(self, channel: str, constraints: dict | None = None,
+                 mode: str = "auto", tilt: float = 0.0) -> dict:
+        """Dobiera filtry dla uśrednionej odpowiedzi kanału.
+
+        Pracujemy na krzywej WYGŁADZONEJ i uśrednionej po pozycjach.
+        Na surowym pomiarze z jednego punktu optymalizator goniłby
+        filtrowanie grzebieniowe, które kilka centymetrów dalej wygląda
+        zupełnie inaczej.
+        """
+        items = [m for m in self.measurements if m.channel == channel]
+        if not items:
+            raise audio.AudioError(f"brak pomiarów kanału {channel}")
+
+        analysis = measure.analyse_set(items, mode=mode)
+        freqs = analysis["freqs"]
+        smoothed = analysis["smoothed"]
+
+        limits = optimize.Constraints(**(constraints or {}))
+        target = optimize.target_curve(freqs, smoothed, tilt_db_per_octave=tilt)
+        result = optimize.fit_filters(freqs, smoothed, target, limits,
+                                      self.setup.samplerate)
+
+        # Do rysowania przerzedzamy tak samo jak pomiary, żeby krzywe
+        # leżały na tej samej siatce.
+        grid, before = log_grid(freqs, smoothed)
+        _, after = log_grid(freqs, np.asarray(result["corrected"]))
+        _, target_grid = log_grid(freqs, np.asarray(result["target"]))
+        _, filters = log_grid(
+            freqs, optimize.simulate(result["bands"], freqs, self.setup.samplerate))
+
+        result["curves"] = {"freqs": grid, "before": before, "after": after,
+                            "target": target_grid, "filters": filters}
+        result["channel"] = channel
+        result["positions"] = analysis["positions"]
+        result.pop("corrected", None)
+        result.pop("target", None)
+        return result
 
     # ---- mapa kanałów ----
 

@@ -487,6 +487,29 @@ class Handler(BaseHTTPRequestHandler):
                 threading.Thread(target=work, daemon=True).start()
                 return {"ok": True, "started": True}
 
+            if action == "optimise":
+                return sess.optimise(
+                    str(body.get("channel") or ""),
+                    body.get("constraints") or None,
+                    str(body.get("mode") or "auto"),
+                    float(body.get("tilt") or 0.0))
+
+            if action == "apply_eq":
+                # Przenosi dobrane filtry do projektu equalizera, żeby dało
+                # się je obejrzeć i poprawić ręcznie przed użyciem.
+                channel = str(body.get("channel") or "")
+                bands = body.get("bands") or []
+                design = self.app.eq
+                target = design.channel(channel)
+                target.bands = [eq.Band(
+                    freq=float(b["freq"]), gain=float(b["gain"]),
+                    q=float(b["q"]), type=str(b.get("type", "PK")),
+                    enabled=bool(b.get("enabled", True))) for b in bands]
+                if body.get("trim") is not None:
+                    target.gain = float(body["trim"])
+                eq.save(design)
+                return {"ok": True, "channel": channel, "bands": len(bands)}
+
             if action == "identify":
                 def identify() -> None:
                     try:
