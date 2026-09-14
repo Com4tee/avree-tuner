@@ -1130,42 +1130,68 @@ function viewProjektor() {
   return `
   <div class="banner">
     <div class="grow">
-      <div class="t">Miejsce zarezerwowane</div>
-      <div class="d">Rzutnik został znaleziony w sieci. Sterowanie dojdzie w kolejnej sesji —
-      potrzebny jest keycode z menu urządzenia.</div>
+      <div class="t">Rozpoznanie zakończone — sterowanie w kolejnej sesji</div>
+      <div class="d">Rzutnik ma otwarty protokół SSAP. Nie potrzeba keycode ani szyfrowanego
+      IP Control — wystarczy jednorazowe parowanie z potwierdzeniem na ekranie.</div>
     </div>
   </div>
 
   <div class="grid" style="grid-template-columns:1fr 1fr">
     <div class="card">
-      <h3>CO WIADOMO</h3>
+      <h3>RZUTNIK</h3>
       <div class="row">
-        <span class="k">Adres</span><span class="v teal">192.168.0.70</span>
-        <span class="k">MAC</span><span class="v">98:93:CC:8D:32:76</span>
-        <span class="k">Producent</span><span class="v">LG</span>
-        <span class="k">Model</span><span class="v">CineBeam DBU510RG</span>
-        <span class="k">Port 9741</span><span class="v teal">otwarty</span>
-        <span class="k">Porty 3000/3001</span><span class="v dim">zamknięte</span>
+        <span class="k">Adres</span><span class="v teal">192.168.0.75</span>
+        <span class="k">Nazwa</span><span class="v">[LG] lodownia</span>
+        <span class="k">Model</span><span class="v">DBF510P-GL</span>
+        <span class="k">System</span><span class="v">webOS</span>
+        <span class="k">MAC</span><span class="v">b0:37:95:2e:4e:05</span>
+        <span class="k">Porty</span><span class="v">3000, 3001, 18181, 36866</span>
+        <span class="k">SSAP</span><span class="v teal">otwarty &mdash; 101 Switching Protocols</span>
       </div>
       <div class="faint" style="font-size:11px;margin-top:12px;line-height:1.5">
-        Port przyjmuje połączenia i milczy — tak zachowuje się szyfrowane IP Control.
-        Porty webOS są zamknięte prawdopodobnie dlatego, że rzutnik był w czuwaniu
-        podczas skanowania.
+        Cztery opisy UPnP na własnych portach, w tym LG WebOSTV DMRplus.
+        Pełny stos webOS.
       </div>
     </div>
 
     <div class="card">
-      <h3>CZEGO POTRZEBA</h3>
+      <h3>CO DA SSAP</h3>
       <div style="font-size:12px;line-height:1.7;color:#9aa3ab">
-        <b style="color:var(--amber)">1.</b> Włącz rzutnik i uruchom ponowny skan —
-        sprawdzimy, czy otworzą się porty webOS. Dają znacznie bogatsze sterowanie:
-        wejścia, aplikacje, wyłączanie, wskaźnik.<br><br>
-        <b style="color:var(--amber)">2.</b> W menu rzutnika znajdź
-        <span class="mono">Ustawienia &rarr; Sieć &rarr; Sterowanie IP</span>
-        i wygeneruj keycode.<br><br>
-        <b style="color:var(--amber)">3.</b> LG IP Control to AES-128 po TCP,
-        z kluczem wyprowadzonym z keycode przez PBKDF2. Zaimplementowanie tego
-        to jeden moduł.
+        Wyłączanie &middot; przełączanie wejść &middot; głośność &middot; uruchamianie aplikacji
+        &middot; powiadomienia na ekranie &middot; wskaźnik.<br><br>
+        <b style="color:var(--amber)">Parowanie:</b> przy pierwszym połączeniu rzutnik
+        wyświetla pytanie na ekranie. Po akceptacji dostajemy klucz klienta i używamy
+        go bezterminowo.<br><br>
+        <b style="color:var(--amber)">Włączanie:</b> SSAP potrafi wyłączyć, ale nie włączyć
+        &mdash; w czuwaniu urządzenie zwija interfejs sieciowy. Do budzenia Wake-on-LAN
+        na powyższy MAC, o ile w menu włączone jest budzenie przez sieć.
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>POZOSTAŁE URZĄDZENIA LG</h3>
+      <div class="row">
+        <span class="k">192.168.0.78</span><span class="v">webOS, model nieustalony</span>
+        <span class="k">192.168.0.70</span><span class="v">„Bedroom LG", Chromecast built-in</span>
+      </div>
+      <div class="faint" style="font-size:11px;margin-top:12px;line-height:1.5">
+        <b style="color:#9aa3ab">Sprostowanie:</b> w pierwszym podejściu wskazałem
+        192.168.0.70 jako rzutnik &mdash; miał MAC z puli LG i otwarty port 9741.
+        Szukałem po producencie zamiast po funkcji. W tej sieci są trzy urządzenia LG
+        i dopiero skan pod kątem portów webOS wskazał właściwe.
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>ŹRÓDŁO OBRAZU</h3>
+      <div class="row">
+        <span class="k">192.168.0.58</span><span class="v teal">Kino Lodownia</span>
+        <span class="k">Platforma</span><span class="v">Google TV (build 3.72)</span>
+      </div>
+      <div class="faint" style="font-size:11px;margin-top:12px;line-height:1.5">
+        To urządzenie podaje obraz do rzutnika. Też ma otwarty port 8008 bez
+        uwierzytelnienia i protokół Cast na 8009 &mdash; da się nim sterować
+        tą samą drogą co głośnikami Cast w domu.
       </div>
       <div style="display:flex;gap:7px;margin-top:14px">
         <button class="btn" data-act="scan">Szukaj urządzeń w sieci</button>
