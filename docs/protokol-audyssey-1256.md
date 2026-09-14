@@ -144,6 +144,40 @@ decyzji — najlepiej wtedy, gdy i tak planuje się rekalibrację.
 Wyjście to `EXIT_AUDMD`. Zostało potwierdzone jako istniejąca komenda,
 ale **nie zostało przetestowane w działaniu**.
 
+## Dlaczego płatna aplikacja NIE odczytuje krzywych
+
+Naturalne podejrzenie brzmi: skoro MultEQ Editor pokazuje krzywe do edycji,
+to musi je skądś pobierać. **Nie pobiera.**
+
+Model danych pliku `.ady` (klasa `DetectedChannel` w ratbuddyssey) zawiera:
+
+| Pole | Co trzyma |
+|---|---|
+| `ResponseData` | **zmierzone odpowiedzi impulsowe**, po jednej na pozycję |
+| `CustomTargetCurvePoints` | **krzywa docelowa** jako lista punktów |
+| `CustomDistance`, `CustomLevel`, `CustomCrossover`, `CustomSpeakerType` | nastawy kanału |
+| `MidrangeCompensation`, `FrequencyRangeRolloff` | opcje korekcji |
+
+**Nie ma tam ani jednego pola na współczynniki filtru** — żadnej
+częstotliwości, dobroci ani wzmocnienia. Filtry są **wyliczane** z pomiaru
+i krzywej docelowej, a nie przechowywane.
+
+Aplikacja rysuje krzywe, bo ma `ResponseData` z sesji pomiarowej, którą sama
+przeprowadziła (`ENTER_AUDY` → `START_CHNL` → `GET_RESPON`). Uruchomiona
+przeciw amplitunerowi skalibrowanemu wcześniej z menu ekranowego **nie pokaże
+tamtych krzywych** — musi zmierzyć od nowa albo wczytać zapisany `.ady`.
+
+To domyka sprawę: nie ma czego odczytywać, bo filtry w postaci edytowalnej
+nie istnieją po stronie amplitunera.
+
+## O podsłuchiwaniu ruchu
+
+Pomysł jest słuszny i **został już zrealizowany**: ratbuddyssey zawiera plik
+`AudysseyMultEQTcpSniffer.cs` — wbudowany sniffer TCP, którym autorzy
+rozłożyli ten protokół. Opisany wyżej format ramki i lista komend to właśnie
+wynik tamtej pracy. Kupienie aplikacji i powtórzenie podsłuchu odtworzyłoby
+wiedzę już opublikowaną.
+
 ## Źródło
 
 Format ramki i lista komend: publiczne repozytorium

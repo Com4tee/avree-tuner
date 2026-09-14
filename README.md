@@ -252,6 +252,26 @@ też trym kanału — bez tego cała krzywa byłaby przesunięta o stałą.
 Sprawdzone na wstawionym podbiciu +5 dB powyżej 4 kHz, cięciu −8 dB przy 45 Hz
 i przesunięciu trymu +2 dB: odtworzone wszystkie trzy.
 
+## Podgląd ekranu amplitunera
+
+Zakładka **Odtwarzanie**, karta „Ekran amplitunera". Dziewięć linii treści
+ekranu przeglądarki źródeł sieciowych, ze strzałkami sterującymi kursorem.
+
+Czytane z **portu 5000** — drugiego kanału sterowania, znalezionego przy
+skanowaniu portów. Mówi tym samym protokołem ASCII co telnet (`PW?` → `PWON`),
+ale jest osobnym gniazdem, więc działa **równolegle** z portem 23, który
+przyjmuje tylko jedno połączenie i trzyma je reszta aplikacji.
+
+Format: `NSE0`–`NSE8`, po sto znaków. Linia 0 to nagłówek, 1–7 pozycje menu,
+8 stopka ze stronicowaniem. Przed tekstem jeden bajt ikony i kursora.
+
+Ograniczenie: `NSE` pokazuje **przeglądarkę źródeł sieciowych**, nie pełne
+menu konfiguracji z telewizora. Przy innym wejściu bywa pusty.
+
+Pozostałe otwarte porty, sprawdzone: 1024 to AirPlay (`AirTunes/190.9`),
+5001 to konsola z promptem `>`, która nie zna żadnego z 49 przetestowanych
+słów, 6666 milczy na wszystko.
+
 ## Ograniczenia ustalone empirycznie
 
 - Odległości głośników **czyta i ustawia `SSSDE`**, krok 1 cm, każdy sub osobno.

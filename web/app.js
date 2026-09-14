@@ -441,6 +441,83 @@ function streamChannels(st, d, on) {
     </div>`;
 }
 
+/* ---------- podgląd ekranu amplitunera ----------
+   Dziewięć linii z komendy NSE, ciągnięte z portu 5000. Port 23 jest zajęty
+   przez sterowanie (amplituner przyjmuje tam jedno połączenie), a 5000 mówi
+   tym samym protokołem i da się otworzyć równolegle. */
+
+let SCREEN = null;
+let screenTimer = null;
+
+const TIP_SCREEN =
+  'Zawartość ekranu przeglądarki źródeł sieciowych — Media Server, radio, USB. '
+  + 'To NIE jest pełne menu konfiguracji z telewizora: komenda NSE pokazuje tylko '
+  + 'przeglądarkę źródeł i przy innym wejściu bywa pusta. Strzałki sterują kursorem '
+  + 'tak samo jak na pilocie.';
+
+function cardScreen() {
+  const sc = SCREEN;
+  if (!sc) { setTimeout(loadScreen, 0);
+    return '<div class="card"><h3>EKRAN AMPLITUNERA</h3><div class="dim">czytam…</div></div>'; }
+
+  const lines = sc.lines || [];
+  const body = lines.slice(1, 8).map((l) => {
+    const pusta = !l.text || l.kind === 'pusta';
+    return `<div class="mono" style="font-size:12px;padding:2px 6px;min-height:17px;
+      ${pusta ? 'opacity:.25' : ''}">${esc(l.text || '·')}</div>`;
+  }).join('');
+
+  return `
+  <div class="card">
+    <h3${rawTip(TIP_SCREEN, 'Ekran amplitunera')}>EKRAN AMPLITUNERA</h3>
+
+    ${sc.error ? `<div class="dim" style="font-size:12px">${esc(sc.error)}</div>` : ''}
+
+    <div style="background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:8px 4px">
+      <div class="mono teal" style="font-size:12px;padding:2px 6px;font-weight:600">${esc(sc.title || '—')}</div>
+      <div style="height:1px;background:var(--line);margin:5px 6px"></div>
+      ${body}
+      <div style="height:1px;background:var(--line);margin:5px 6px"></div>
+      <div class="mono faint" style="font-size:11px;padding:2px 6px">${esc(sc.footer || '')}</div>
+    </div>
+
+    <div style="display:flex;gap:6px;margin-top:11px;align-items:center;flex-wrap:wrap">
+      <button class="btn" data-osd="up">▲</button>
+      <button class="btn" data-osd="down">▼</button>
+      <button class="btn" data-osd="left">◀</button>
+      <button class="btn" data-osd="right">▶</button>
+      <button class="btn primary" data-osd="enter">OK</button>
+      <button class="btn" data-osd="back">Wstecz</button>
+      <div class="grow"></div>
+      <button class="btn" data-osd="__refresh">Odśwież</button>
+    </div>
+    <div class="faint" style="font-size:11px;margin-top:8px">
+      Czytane z portu 5000 — drugiego kanału sterowania, niezależnego od portu 23,
+      który zajmuje reszta aplikacji. Odświeża się co 2 s.
+    </div>
+  </div>`;
+}
+
+async function loadScreen() {
+  try { SCREEN = await api('/api/display'); }
+  catch (e) { SCREEN = { lines: [], error: e.message }; }
+  if (TAB === 'odtwarzanie') render();
+}
+
+function screenTick() {
+  clearInterval(screenTimer);
+  screenTimer = setInterval(async () => {
+    if (TAB !== 'odtwarzanie') return;
+    try {
+      const fresh = await api('/api/display');
+      const stary = JSON.stringify((SCREEN && SCREEN.lines || []).map((l) => l.text));
+      const nowy = JSON.stringify((fresh.lines || []).map((l) => l.text));
+      SCREEN = fresh;
+      if (stary !== nowy) render();      // przerysuj tylko przy zmianie treści
+    } catch (e) { /* cicho */ }
+  }, 2000);
+}
+
 function cardStream() {
   const st = STREAM;
   if (!st) {
@@ -609,6 +686,8 @@ function viewOdtwarzanie() {
           <button class="btn" data-act="reload-renderer">Odśwież</button>
         </div>
       </div>
+
+      ${cardScreen()}
 
       ${cardStream()}
 
@@ -2672,6 +2751,16 @@ function bind() {
     };
   });
   if ($('#strmeter')) streamTick();
+
+  view.querySelectorAll('[data-osd]').forEach((b) => {
+    const key = b.dataset.osd;
+    if (key === '__refresh') b.onclick = () => loadScreen();
+    else b.onclick = async () => {
+      await cmd('osd', key);
+      setTimeout(loadScreen, 400);     // ekran potrzebuje chwili
+    };
+  });
+  if (TAB === 'odtwarzanie') screenTick();
 
   view.querySelectorAll('[data-sa]').forEach((b) => {
     const act = b.dataset.sa;

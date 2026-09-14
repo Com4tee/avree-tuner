@@ -20,6 +20,7 @@ from typing import Any
 
 from . import (androidtv, cast, discovery, eq,
                projector as projector_mod, session as session_mod,
+               display as display_mod,
                stream as stream_mod, subalign as subalign_mod,
                upnp, webos)
 from .avr import (
@@ -93,6 +94,9 @@ class App:
         # Zestrajanie czasowe dwóch subwooferów — przemiatanie
         # odległości SW2 z pomiarem mikrofonem.
         self.subalign = subalign_mod.SubAlign()
+        # Podgląd ekranu — osobne gniazdo na porcie 5000, bo port 23
+        # przyjmuje tylko jedno połączenie i trzyma je sterowanie.
+        self.display = display_mod.Display(avr.host)
 
     def ensure_renderer(self) -> upnp.Renderer | None:
         if self.renderer is None and self.renderer_error is None:
@@ -204,6 +208,8 @@ class Handler(BaseHTTPRequestHandler):
                         "note": self.app.webos.scan_note,
                         "scanning": self.app.webos.scanning,
                         "buttons": webos.PointerInput.BUTTONS})
+        elif route == "/api/display":
+            self._json(self.app.display.refresh(self.app.avr.host))
         elif route == "/api/subalign":
             self._json(self._subalign_payload())
         elif route == "/api/stream":
