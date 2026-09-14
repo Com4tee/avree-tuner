@@ -178,6 +178,12 @@ class Handler(BaseHTTPRequestHandler):
             self._json(self._cast_payload())
         elif route == "/api/measure":
             self._json(self._measure_payload())
+        elif route == "/api/measure/crossover":
+            q = urllib.parse.parse_qs(parsed.query)
+            self._json(self.app.measure.crossover(q.get("channel", ["FL"])[0]))
+        elif route == "/api/measure/correction":
+            q = urllib.parse.parse_qs(parsed.query)
+            self._json(self.app.measure.correction(q.get("channel", ["FL"])[0]))
         elif route == "/api/measure/channels":
             self._json({"result": self.app.channel_scan})
         elif route == "/api/measure/level":

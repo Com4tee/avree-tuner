@@ -218,6 +218,40 @@ liczymy własne filtry i wgrywamy z powrotem.
 krzywe Audyssey. Powrót to przejście całej procedury od nowa. Nie wchodzić
 w ten tryb bez świadomej decyzji.
 
+## Punkt podziału i krzywa Audyssey — liczone, nie zgadywane
+
+Zakładka **Pomiar**, karta „Co wynika z pomiaru".
+
+**Punkt podziału** bierze się z opadania zmierzonego kanału, nie z okrągłej
+liczby: szukamy −3 dB względem poziomu w paśmie 200–800 Hz i stawiamy podział
+**1,5× wyżej**. Zapas jest konieczny, bo przy własnym opadaniu głośnik ma już
+duże zniekształcenia i mały zapas wysterowania, choć poziom jeszcze nie spadł.
+Wynik jest zaokrąglany w górę do wartości, które X3300W przyjmuje
+(40, 60, 80, 90, 100, 110, 120, 150, 200, 250 Hz).
+
+Sprawdzone na filtrach o znanym F3 — 35, 45, 65 i 95 Hz: wykryte **co do 0,0 Hz**.
+
+Ma to znaczenie przy dwóch różnych subwooferach (tubowy i bass-reflex): każdy
+ma inne opadanie i inny punkt podziału, a różnicy nie da się zgadnąć.
+
+**Krzywa korekcji Audyssey.** Gotowych filtrów **nie da się odczytać**
+z procesora — przetestowałem około 600 nazw komend, `GET_RESPON` milczy poza
+sesją kalibracji, a `SET_COEFDT` jest tylko do zapisu.
+
+Da się jednak zmierzyć to samo: różnica dwóch pomiarów tego samego kanału,
+raz z MultEQ włączonym i raz wyłączonym, **jest** krzywą korekcji. Akustycznie
+jest to nawet więcej niż odczyt filtru — pokazuje, co faktycznie dociera do
+ucha, razem z wpływem głośnika i pomieszczenia.
+
+Umowa pozycji: **1..N** z Audyssey ON, **101..100+N** z OFF. Pary są oczywiste
+(1 i 101 to ten sam punkt), a jedno i drugie mieści się w istniejącej strukturze.
+
+Oba pomiary są wyrównywane poziomem w paśmie 200–500 Hz, bo Audyssey zmienia
+też trym kanału — bez tego cała krzywa byłaby przesunięta o stałą.
+
+Sprawdzone na wstawionym podbiciu +5 dB powyżej 4 kHz, cięciu −8 dB przy 45 Hz
+i przesunięciu trymu +2 dB: odtworzone wszystkie trzy.
+
 ## Ograniczenia ustalone empirycznie
 
 - Odległości głośników **czyta i ustawia `SSSDE`**, krok 1 cm, każdy sub osobno.

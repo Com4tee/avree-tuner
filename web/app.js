@@ -1564,6 +1564,86 @@ function subalignCurve(sa) {
   </svg>`;
 }
 
+/* ---------- co wynika z pomiaru: podział i krzywa Audyssey ---------- */
+
+let XOVER = null;
+let CORR = null;
+
+const TIP_XO =
+  'Punkt podziału policzony z opadania zmierzonego kanału, nie z okrągłej liczby. '
+  + 'Szukamy −3 dB względem poziomu w paśmie 200–800 Hz i stawiamy podział 1,5× wyżej. '
+  + 'Zapas jest potrzebny, bo przy własnym opadaniu głośnik ma już duże zniekształcenia '
+  + 'i mały zapas wysterowania, nawet gdy poziom jeszcze nie spadł.';
+const TIP_AB =
+  'Gotowych filtrów Audyssey nie da się odczytać z procesora — nie ma takiej komendy '
+  + '(sprawdzone ~600 nazw). Ale różnica dwóch pomiarów tego samego kanału, raz z MultEQ '
+  + 'włączonym i raz wyłączonym, JEST tą krzywą — zmierzoną akustycznie, razem z wpływem '
+  + 'głośnika i pokoju. Zmierz pozycje 1..N z Audyssey ON, potem wyłącz MultEQ '
+  + 'i zmierz te same punkty jako 101..100+N.';
+
+function cardAnaliza() {
+  const ch = MEAS_CHANNEL;
+  const xo = XOVER && XOVER.channel === ch ? XOVER : null;
+  const co = CORR && CORR.channel === ch ? CORR : null;
+
+  const pasma = co && co.ready ? Object.entries(co.bands).map(([k, v]) =>
+    `<span class="dim">${esc(k)} <b class="${v > 2 ? 'bad' : (v < -2 ? 'teal' : '')}">${v > 0 ? '+' : ''}${v}</b></span>`
+  ).join('') : '';
+
+  return `
+  <div class="card">
+    <h3>CO WYNIKA Z POMIARU — ${esc(ch)}</h3>
+
+    <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+      <button class="btn" data-an="xover"${rawTip(TIP_XO, 'Punkt podziału')}>Policz podział</button>
+      <button class="btn" data-an="corr"${rawTip(TIP_AB, 'Krzywa Audyssey')}>Krzywa Audyssey (A/B)</button>
+    </div>
+
+    ${xo ? (xo.ready ? `
+    <div class="row" style="margin-top:11px">
+      <span class="k">−3 dB</span><span class="v mono">${xo.f3_hz} Hz</span>
+      <span class="k">−6 dB</span><span class="v mono">${xo.f6_hz != null ? xo.f6_hz + ' Hz' : '—'}</span>
+      <span class="k">Proponowany podział</span><span class="v mono teal">${xo.suggested_hz} Hz</span>
+    </div>
+    <div class="faint" style="font-size:11px;margin-top:7px">${esc(xo.note)}</div>`
+    : `<div class="dim" style="font-size:12px;margin-top:10px">${esc(xo.note || '')}</div>`) : ''}
+
+    ${co ? (co.ready ? `
+    <div class="row" style="margin-top:12px">
+      <span class="k">Góra 4–16 kHz</span>
+      <span class="v mono ${co.treble_mean_db > 2 ? 'bad' : 'teal'}">${co.treble_mean_db > 0 ? '+' : ''}${co.treble_mean_db} dB średnio</span>
+      <span class="k">Największe podbicie</span>
+      <span class="v mono">${co.max_boost_db > 0 ? '+' : ''}${co.max_boost_db} dB @ ${co.max_boost_hz} Hz</span>
+      <span class="k">Największe cięcie</span>
+      <span class="v mono">${co.max_cut_db} dB @ ${co.max_cut_hz} Hz</span>
+    </div>
+    <div class="mono" style="font-size:11px;margin-top:9px;display:flex;gap:14px;flex-wrap:wrap">${pasma}</div>
+    <div class="banner ${co.treble_mean_db > 2 ? 'bad' : ''}" style="margin-top:11px">
+      <div class="grow"><div class="d">${esc(co.verdict)}</div></div></div>`
+    : `<div class="dim" style="font-size:12px;margin-top:10px">${esc(co.note || '')}
+       ${co.positions ? `<br><span class="mono faint">ON: ${(co.positions.on || []).join(', ') || 'brak'} · OFF: ${(co.positions.off || []).join(', ') || 'brak'}</span>` : ''}</div>`) : ''}
+
+    <div class="faint" style="font-size:11px;margin-top:11px;line-height:1.5">
+      Krzywych Audyssey <b>nie da się pobrać</b> z procesora — takiej komendy nie ma.
+      Różnica pomiarów ON/OFF daje to samo, tylko zmierzone akustycznie: zmierz pozycje
+      <b>1..N</b> z włączonym MultEQ, potem wyłącz go w zakładce Audyssey i zmierz te same
+      punkty jako <b>101..100+N</b>.
+    </div>
+  </div>`;
+}
+
+async function loadXover() {
+  try { XOVER = await api('/api/measure/crossover?channel=' + encodeURIComponent(MEAS_CHANNEL)); }
+  catch (e) { XOVER = { channel: MEAS_CHANNEL, ready: false, note: e.message }; }
+  render();
+}
+
+async function loadCorrection() {
+  try { CORR = await api('/api/measure/correction?channel=' + encodeURIComponent(MEAS_CHANNEL)); }
+  catch (e) { CORR = { channel: MEAS_CHANNEL, ready: false, note: e.message }; }
+  render();
+}
+
 function cardSubAlign() {
   const sa = SUBALIGN;
   if (!sa) { setTimeout(loadSubAlign, 0);
@@ -1751,6 +1831,8 @@ function viewPomiar() {
         <h3>POZIOM Z MIKROFONU</h3>
         <div id="levelbox">${levelMeter()}</div>
       </div>
+
+      ${cardAnaliza()}
 
       ${cardSubAlign()}
 
@@ -2605,6 +2687,11 @@ function bind() {
     };
     else if (act === 'stop') b.onclick = () => subalignAction('stop');
     else if (act === 'apply') b.onclick = () => subalignAction('apply');
+  });
+
+  view.querySelectorAll('[data-an]').forEach((b) => {
+    if (b.dataset.an === 'xover') b.onclick = () => loadXover();
+    else if (b.dataset.an === 'corr') b.onclick = () => loadCorrection();
   });
 
   // suwak głośności: w trakcie ciągnięcia tylko odczyt, komenda dopiero po puszczeniu

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import audio, measure, optimize
+from . import analiza, audio, measure, optimize
 
 # Kanały, które umiemy zaadresować, i ich indeks w strumieniu wielokanałowym.
 # Kolejność Windows dla 5.1: FL, FR, FC, LFE, BL, BR.
@@ -227,6 +227,74 @@ class MeasureSession:
                 },
                 "count": len(self.measurements),
             }
+
+
+    # ---- wnioski liczone z pomiaru ----
+    #
+    # Umowa pozycji dla porównania A/B: pomiary z Audyssey WŁĄCZONYM idą na
+    # pozycje 1..N, z WYŁĄCZONYM na 101..100+N. Dzięki temu jedno i drugie
+    # mieści się w istniejącej strukturze bez dokładania pól, a pary
+    # pozycja↔pozycja są oczywiste: 1 i 101 to ten sam punkt w pokoju.
+    AB_OFFSET = 100
+
+    def subset_curve(self, channel: str, positions: list[int],
+                     mode: str = "auto") -> dict | None:
+        """Uśrednienie wybranych pozycji, a nie wszystkich."""
+        wanted = set(int(p) for p in positions)
+        items = [m for m in self.measurements
+                 if m.channel == channel and m.position in wanted]
+        if not items:
+            return None
+        result = measure.analyse_set(items, mode=mode)
+        freqs, mag = log_grid(result["freqs"], result["magnitude"])
+        _, smoothed = log_grid(result["freqs"], result["smoothed"])
+        return {"freqs": freqs, "magnitude": mag, "smoothed": smoothed,
+                "positions": sorted(wanted)}
+
+    def crossover(self, channel: str) -> dict:
+        """Proponowany punkt podziału z opadania zmierzonego kanału."""
+        curve = self.combined(channel)
+        if curve is None:
+            return {"ready": False, "note": f"brak pomiarów kanału {channel}"}
+        out = analiza.crossover_advice(curve["freqs"], curve["smoothed"])
+        out["channel"] = channel
+        out["positions"] = curve["positions"]
+        return out
+
+    def ab_positions(self, channel: str) -> dict:
+        """Które pozycje są zmierzone z Audyssey ON, a które z OFF."""
+        on, off = [], []
+        for m in self.measurements:
+            if m.channel != channel:
+                continue
+            (off if m.position > self.AB_OFFSET else on).append(m.position)
+        return {"on": sorted(on), "off": sorted(off)}
+
+    def correction(self, channel: str) -> dict:
+        """Krzywa korekcji Audyssey z różnicy pomiarów ON i OFF.
+
+        Gotowych filtrów nie da się odczytać z procesora — takiej komendy
+        nie ma. Ta różnica jest tym samym, tylko zmierzonym akustycznie,
+        i pokazuje dodatkowo wpływ głośnika oraz pomieszczenia.
+        """
+        pos = self.ab_positions(channel)
+        if not pos["on"] or not pos["off"]:
+            return {"ready": False, "positions": pos, "note": (
+                "potrzebne oba komplety: z Audyssey włączonym (pozycje 1..N) "
+                "i wyłączonym (101..100+N)")}
+
+        on = self.subset_curve(channel, pos["on"])
+        off = self.subset_curve(channel, pos["off"])
+        if on is None or off is None:
+            return {"ready": False, "positions": pos, "note": "brak danych"}
+
+        out = analiza.correction_curve(on["freqs"], on["smoothed"], off["smoothed"])
+        out["ready"] = True
+        out["channel"] = channel
+        out["positions"] = pos
+        out["on_db"] = on["smoothed"]
+        out["off_db"] = off["smoothed"]
+        return out
 
     def clear(self, channel: str | None = None) -> dict:
         with self._lock:
