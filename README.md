@@ -116,9 +116,32 @@ w innym pokoju niż ekrany.
 Jeśli któryś pilot nie rusza niczym na ekranie, do poprawy są numery pól
 w komunikacie wstrzykującym klawisz.
 
-## Znane usterki
+## Jak wyznaczana jest górna granica korekcji
 
-- `correctable_mask` i `minimum_phase` w `avree/measure.py` **nie działają** —
-  zwracają 100% korygowalnego pasma niezależnie od obecności odbicia.
-  Oznaczone ostrzeżeniami w kodzie i flagą `correctable_verified: False`.
-  Reszta silnika pomiarowego jest zweryfikowana liczbowo.
+Nie przez fazę, tylko przez **rozrzut między pozycjami mikrofonu**. Tam gdzie
+pomiary z różnych punktów strefy odsłuchu się zgadzają, korekcja przeniesie się
+na całą strefę. Tam gdzie się rozjeżdżają, filtr poprawi jeden punkt i popsuje
+pozostałe.
+
+Optymalizator bierze tę granicę z pomiaru, o ile nie narzucisz własnej.
+Z jednej pozycji nie da się orzec o powtarzalności, więc maska nie przepuszcza
+wtedy niczego.
+
+**Sprostowanie wcześniejszego założenia.** Twierdziłem, że rezonans modalny jest
+minimalnofazowy, a odbicie nie — i że to pozwala je rozróżnić. To nieprawda.
+Filtr grzebieniowy `1 + g·z^-d` ma zero wewnątrz okręgu jednostkowego dla
+`|g| < 1`, więc odbicie słabsze od dźwięku bezpośredniego **jest**
+minimalnofazowe. Sprawdzone: przy g = 0.3, 0.5 i 0.8 faza nadmiarowa wynosi
+dokładnie zero, pojawia się dopiero od g ≈ 0.99.
+
+`minimum_phase` i `excess_phase` zostały naprawione (metoda cepstralna, błąd
+0.00° wobec prawdziwej fazy biquada) i służą teraz do tego, do czego nadają się
+naprawdę: wykrywania pomiaru zrobionego w zapadzie interferencyjnym, gdzie suma
+odbić przewyższa dźwięk bezpośredni.
+
+## Znane ograniczenia
+
+- Próg rozrzutu 3 dB, powyżej którego uznajemy pasmo za niekorygowalne, **nie
+  jest skalibrowany** na prawdziwym pomieszczeniu. Mechanizm jest sprawdzony
+  (wykryta granica trafia w miejsce rozbieżności z dokładnością kilku Hz), ale
+  właściwą wartość progu pokażą dopiero pomiary w Twoim pokoju.

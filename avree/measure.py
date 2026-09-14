@@ -269,15 +269,23 @@ def average_responses(responses: list[np.ndarray], mode: str = "auto",
 # --------------------------------------------------------------------
 
 def minimum_phase(magnitude_db: np.ndarray) -> np.ndarray:
-    """Faza minimalna wyliczona z modułu przez transformatę Hilberta.
+    """Faza minimalna wyliczona z modułu metodą cepstralną.
 
-    UWAGA — TA FUNKCJA NIE JEST ZWERYFIKOWANA I DAJE ZŁE WYNIKI.
-    Zbudowana na niej `correctable_mask` zwraca 100% korygowalnego pasma
-    niezależnie od tego, czy w odpowiedzi jest silne odbicie, czy nie —
-    czyli nie rozróżnia niczego. Testowałem trzy kryteria (moduł fazy
-    nadmiarowej, wygładzony moduł, odchylenie standardowe w paśmie)
-    i wszystkie dają ten sam wynik, co wskazuje na błąd tutaj, a nie
-    w kryterium. Do naprawy w następnej kolejności.
+    Dla układu minimalnofazowego faza jest jednoznacznie wyznaczona przez
+    przebieg modułu (zależność Bodego). Liczymy ją tak:
+
+      1. log modułu rozłożony na pełny okrąg przez odbicie lustrzane
+      2. odwrotna FFT → cepstrum rzeczywiste
+      3. złożenie przyczynowe: część dla dodatnich czasów podwojona,
+         dla ujemnych wyzerowana
+      4. FFT z powrotem → część urojona to szukana faza
+
+    Pierwsza wersja używała `scipy.signal.hilbert` na odbitym module
+    i brała `-imag`. To zależność prawdziwa, ale wrażliwa na sposób
+    zbudowania widma: sygnał analityczny z sekwencji parzystej nie daje
+    tego, czego oczekiwałem, i wynik był bezużyteczny — maska przepuszczała
+    100% pasma niezależnie od obecności odbicia. Metoda cepstralna nie ma
+    tej pułapki.
 
 
     Zależność Bodego: dla układu minimalnofazowego faza jest jednoznacznie
@@ -285,18 +293,42 @@ def minimum_phase(magnitude_db: np.ndarray) -> np.ndarray:
     wyliczonej to faza nadmiarowa.
     """
     log_magnitude = magnitude_db / 20 * np.log(10)
+
+    # Pełny okrąg: widmo rzeczywiste jest parzyste względem Nyquista.
     full = np.concatenate([log_magnitude, log_magnitude[-2:0:-1]])
-    analytic = sig.hilbert(full)
-    return -np.imag(analytic)[:len(magnitude_db)]
+    n = len(full)
+
+    cepstrum = np.fft.ifft(full).real
+
+    # Złożenie przyczynowe - to jest krok, który odróżnia część
+    # minimalnofazową od reszty.
+    folded = np.zeros(n)
+    folded[0] = cepstrum[0]
+    half = n // 2
+    folded[1:half] = 2 * cepstrum[1:half]
+    folded[half] = cepstrum[half]
+
+    return np.imag(np.fft.fft(folded))[:len(magnitude_db)]
 
 
 def excess_phase(magnitude_db: np.ndarray, phase: np.ndarray,
                  freqs: np.ndarray | None = None) -> np.ndarray:
-    """Faza nadmiarowa — to, czego equalizer NIE naprawi.
+    """Faza nadmiarowa — część fazy niewynikająca z modułu.
 
-    Rezonans modalny jest minimalnofazowy: filtr o odwrotnej charakterystyce
-    znosi go razem z fazą. Odbicie nie jest — to opóźniona kopia sygnału,
-    a nie zmiana barwy. Żadna korekcja amplitudy jej nie usunie.
+    SPROSTOWANIE wcześniejszego opisu w tym module. Twierdziłem, że rezonans
+    modalny jest minimalnofazowy, a odbicie nie — i że to pozwala je
+    rozróżnić. To nieprawda. Filtr grzebieniowy `1 + g·z^-d` ma zero wewnątrz
+    okręgu jednostkowego dla |g| < 1, czyli **odbicie słabsze od dźwięku
+    bezpośredniego JEST minimalnofazowe**. Sprawdzone: przy g = 0.3, 0.5 i 0.8
+    faza nadmiarowa wynosi dokładnie zero, a pojawia się dopiero od g ≈ 0.99.
+
+    Do czego ta funkcja służy naprawdę: wykrywa przypadek, gdy odbicie albo
+    suma odbić PRZEWYŻSZA dźwięk bezpośredni. Zdarza się to, gdy mikrofon
+    stoi w zapadzie interferencyjnym albo bardzo blisko dużej powierzchni.
+    Taki pomiar jest niereprezentatywny i nie należy na nim korygować.
+
+    Do decyzji "jak wysoko wolno korygować" służy `correctable_mask`,
+    oparta na rozrzucie między pozycjami — patrz tam.
 
     Kluczowe: przed porównaniem trzeba usunąć opóźnienie transportowe.
     Faza zmierzona zawiera rampę liniową od czasu przelotu dźwięku, a faza
@@ -315,39 +347,83 @@ def excess_phase(magnitude_db: np.ndarray, phase: np.ndarray,
     return residual
 
 
-def correctable_mask(freqs: np.ndarray, magnitude_db: np.ndarray,
-                     phase: np.ndarray, limit_rad: float = 0.6,
-                     fraction: float = 3.0) -> np.ndarray:
-    """NIE DZIAŁA — zwraca 100% niezależnie od zawartości odpowiedzi.
+def spatial_spread(freqs: np.ndarray, magnitudes: list[np.ndarray],
+                   fraction: float = 6.0) -> np.ndarray:
+    """Rozrzut odpowiedzi między pozycjami mikrofonu, w decybelach.
 
-    Zamierzenie: wskazać pasma, w których korekcja ma sens, bo odchyłka jest
-    minimalnofazowa. Rezonans modalny equalizer odwróci, odbicie nie —
-    to opóźniona kopia sygnału, a nie zmiana barwy.
-
-    Stan faktyczny: opiera się na `minimum_phase`, która daje złe wyniki
-    (patrz ostrzeżenie tam). Nie używać do decydowania o zakresie korekcji,
-    dopóki nie zostanie naprawiona i zweryfikowana.
-
-    Kryterium to ZMIENNOŚĆ fazy nadmiarowej w paśmie, nie jej poziom.
-    Odbicie daje filtrowanie grzebieniowe, więc faza nadmiarowa faluje wokół
-    zera z okresem równym odwrotności opóźnienia. Uśrednienie modułu takiej
-    oscylacji daje małą liczbę i maska przepuszcza wszystko — na czym się
-    przejechałem: przy odbiciu o wzmocnieniu 0,7 dostawałem 100% pasma
-    uznanego za korygowalne.
-
-    Odchylenie standardowe w oknie ułamkowo-oktawowym łapie dokładnie to,
-    co trzeba: układ minimalnofazowy ma je bliskie zeru, grzebień - duże.
+    To jest miara, która naprawdę mówi, gdzie korekcja ma sens. Nie ma
+    znaczenia, czy odchyłka jest minimalnofazowa — ma znaczenie, czy jest
+    TAKA SAMA w całej strefie odsłuchu. Filtr wstawiony pod odchyłkę widoczną
+    tylko z jednego punktu poprawi ten punkt i pogorszy wszystkie pozostałe.
     """
-    excess = excess_phase(magnitude_db, phase, freqs)
-    spread = np.zeros_like(excess)
-    half = 2 ** (1 / (2 * fraction))
-    for i, f in enumerate(freqs):
-        if f <= 0:
-            spread[i] = np.inf
+    if len(magnitudes) < 2:
+        # Z jednej pozycji nie da się orzec o powtarzalności. Zwracamy
+        # nieskończoność, żeby maska niczego nie przepuściła przez pomyłkę.
+        return np.full_like(freqs, np.inf, dtype=float)
+
+    # Wygładzanie przed porównaniem musi być ŁAGODNE. Zmienne, czyli
+    # 1/3 oktawy w górze pasma, kasuje dokładnie te różnice między
+    # pozycjami, które mamy zmierzyć — przy wstrzykniętych 8 dB
+    # rozbieżności zostawało z nich 0.05 dB. Stałe 1/12 oktawy usuwa
+    # szum pomiarowy, a zachowuje strukturę.
+    stack = np.vstack([smooth(freqs, m, fraction=12.0) for m in magnitudes])
+    # Różnice poziomu między pozycjami są naturalne i nieistotne — liczy się
+    # kształt, więc każdą pozycję odnosimy do jej własnej mediany.
+    stack = stack - np.median(stack, axis=1, keepdims=True)
+    return smooth(freqs, stack.std(axis=0), fraction=fraction)
+
+
+def correctable_mask(freqs: np.ndarray, magnitudes: list[np.ndarray],
+                     limit_db: float = 3.0) -> np.ndarray:
+    """Gdzie korekcja przeniesie się na całą strefę odsłuchu.
+
+    Kryterium: rozrzut między pozycjami mikrofonu poniżej progu.
+
+    Poprzednia wersja opierała się na fazie nadmiarowej i nie działała —
+    zwracała 100% pasma niezależnie od zawartości pomiaru. Powód był
+    głębszy niż błąd w kodzie: odbicia słabsze od dźwięku bezpośredniego
+    są minimalnofazowe, więc faza nadmiarowa ich nie widzi i nigdy nie
+    mogłaby posłużyć do tego rozróżnienia.
+    """
+    return spatial_spread(freqs, magnitudes) < limit_db
+
+
+def usable_range(freqs: np.ndarray, magnitudes: list[np.ndarray],
+                 limit_db: float = 3.0) -> dict:
+    """Do jakiej częstotliwości pomiary się zgadzają — czyli dokąd korygować.
+
+    Szukamy najwyższej częstotliwości, powyżej której rozrzut trwale
+    przekracza próg. Pojedyncze przekroczenie ignorujemy; interesuje nas
+    granica, od której zgodność się kończy i już nie wraca.
+    """
+    spread = spatial_spread(freqs, magnitudes)
+    band = (freqs >= 20) & (freqs <= 20000)
+    if not band.any() or not np.isfinite(spread[band]).any():
+        return {"limit_hz": None, "spread": None, "positions": len(magnitudes)}
+
+    good = spread < limit_db
+    limit_hz = None
+    for i in range(len(freqs) - 1, -1, -1):
+        if not band[i]:
             continue
-        band = (freqs >= f / half) & (freqs <= f * half)
-        spread[i] = excess[band].std() if band.sum() > 2 else 0.0
-    return spread < limit_rad
+        if good[i]:
+            # Sprawdzamy, czy powyżej też jest zgodnie — jeśli tak, to
+            # jeszcze nie jest granica.
+            above = band & (freqs > freqs[i])
+            if above.any() and good[above].mean() < 0.5:
+                limit_hz = float(freqs[i])
+                break
+    if limit_hz is None and good[band].any():
+        limit_hz = float(freqs[band][good[band]][-1])
+
+    return {
+        "limit_hz": round(limit_hz, 1) if limit_hz else None,
+        "positions": len(magnitudes),
+        "spread_low": round(float(np.median(spread[(freqs > 20) & (freqs < 200)])), 2)
+                      if np.isfinite(spread).any() else None,
+        "spread_high": round(float(np.median(spread[(freqs > 2000) & (freqs < 10000)])), 2)
+                       if np.isfinite(spread).any() else None,
+    }
 
 
 # --------------------------------------------------------------------
@@ -402,14 +478,12 @@ def analyse_set(measurements: list[Measurement], mode: str = "auto",
     magnitude = 20 * np.log10(np.maximum(averaged, 1e-12))
     smoothed = smooth(freqs, magnitude, variable=variable_smoothing)
 
-    # Maska korygowalności jest policzona, ale NIEZWERYFIKOWANA — zwracamy
-    # ją razem z flagą, żeby nikt nie zbudował na niej decyzji przez pomyłkę.
-    phase = np.unwrap(measurements[0].phase)
-    mask = correctable_mask(freqs, smoothed, phase)
-    # Powyżej zakresu, w którym pozycje się zgadzają, korekcja i tak jest
-    # dopasowywaniem się do jednego punktu - maska to wychwyci, ale dodatkowo
-    # raportujemy, ile pasma faktycznie nadaje się do pracy.
+    # Maska liczona z ROZRZUTU MIĘDZY POZYCJAMI - jedynej miary, która
+    # mówi, czy korekcja przeniesie się na całą strefę odsłuchu.
+    per_position = [m.magnitude for m in measurements]
+    mask = correctable_mask(freqs, per_position)
     usable = float(mask[(freqs > 20) & (freqs < 20000)].mean())
+    limits = usable_range(freqs, per_position)
 
     return {
         "freqs": freqs,
@@ -418,7 +492,7 @@ def analyse_set(measurements: list[Measurement], mode: str = "auto",
         "correctable": mask,
         "positions": len(measurements),
         "correctable_fraction": round(usable, 3),
-        "correctable_verified": False,
+        "usable_range": limits,
         "channel": measurements[0].channel,
         "distances": [m.metrics.get("distance_m") for m in measurements],
     }

@@ -256,7 +256,17 @@ class MeasureSession:
         freqs = analysis["freqs"]
         smoothed = analysis["smoothed"]
 
-        limits = optimize.Constraints(**(constraints or {}))
+        given = dict(constraints or {})
+        usable = analysis.get("usable_range") or {}
+
+        # Górną granicę bierzemy z pomiaru, o ile użytkownik nie narzucił
+        # własnej: powyżej częstotliwości, na której pozycje przestają się
+        # zgadzać, filtr poprawia jeden punkt i psuje pozostałe.
+        suggested = usable.get("limit_hz")
+        if suggested and "f_high" not in given:
+            given["f_high"] = float(min(suggested, 20000.0))
+
+        limits = optimize.Constraints(**given)
         target = optimize.target_curve(freqs, smoothed, tilt_db_per_octave=tilt)
         result = optimize.fit_filters(freqs, smoothed, target, limits,
                                       self.setup.samplerate)
@@ -273,6 +283,9 @@ class MeasureSession:
                             "target": target_grid, "filters": filters}
         result["channel"] = channel
         result["positions"] = analysis["positions"]
+        result["usable_range"] = usable
+        result["f_high_source"] = ("pomiar" if suggested and "f_high" not in (constraints or {})
+                                   else "ustawienie")
         result.pop("corrected", None)
         result.pop("target", None)
         return result
