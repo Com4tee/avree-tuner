@@ -78,10 +78,38 @@ innego — działa też dla przeglądarki i gier.
 
 Dwie drogi wyjścia:
 
-| Droga | Opóźnienie | Do czego |
-|---|---|---|
-| Nieskończony WAV po HTTP → UPnP amplitunera | sekundy (renderer buforuje) | muzyka |
-| Inne lokalne wyjście (optyka, HDMI) | dziesiątki ms | film |
+| Droga | Opóźnienie | Kanały | Do czego |
+|---|---|---|---|
+| Nieskończony WAV po HTTP → UPnP amplitunera | sekundy (renderer buforuje) | **tylko stereo** | muzyka |
+| Inne lokalne wyjście (optyka, HDMI) | dziesiątki ms | tyle, ile daje urządzenie | film, 5.1 |
+
+### Co z 5.1 i dwoma subwooferami
+
+Splot filtruje **każdy kanał osobno** — sprawdzone na sześciu kanałach naraz,
+każdy dostał własne pasma z dokładnością do 0,00 dB. Ale o liczbie kanałów
+decyduje Windows, nie aplikacja: pętla WASAPI dostaje dokładnie tyle, ile
+wyjście ma ustawione w *Panel sterowania → Dźwięk → Konfiguruj*. Wyjście
+ustawione na stereo daje dwa kanały i żadne ustawienie w aplikacji tego
+nie zmieni.
+
+Dwa ograniczenia są twarde i wynikają ze sprzętu:
+
+1. **Droga przez UPnP nigdy nie poniesie 5.1.** Renderer sieciowy X3300W jest
+   stereo — jego lista formatów kończy się na `audio/L16;rate=48000;channels=2`,
+   nie ma tam AC3, E-AC3 ani DTS. Materiał wielokanałowy jest przed wysłaniem
+   zsumowany do stereo (ITU-R BS.775: środek i surroundy po −3 dB, LFE pominięty).
+   Pełne 5.1 przechodzi **wyłącznie** przez lokalne wyjście HDMI.
+
+2. **Drugiego subwoofera nie da się skorygować z komputera.** Z PC wychodzi
+   jeden kanał LFE; rozdział na SW1 i SW2 robi wzmacniacz w środku. Różnicę
+   między dwoma subami wyrówna tylko Audyssey Sub EQ HT albo plik `.ady` —
+   czyli etap 6, jeszcze niezbudowany.
+
+Kolejność kanałów w pętli przyjęta jest wg standardu WAVE (FL, FR, środek,
+LFE, tylne). **Ta kolejność nie została sprawdzona na docelowym sprzęcie** —
+stacjonarny ma tylko wyjście stereo, więc nie było czego mierzyć. Dlatego
+przypisanie kanałów do pasm jest w interfejsie edytowalne: da się je poprawić
+na słuch, także w trakcie grania.
 
 Zmierzone na tym komputerze i na **Denon AVR-X3300W**:
 
@@ -162,6 +190,11 @@ w innym pokoju niż ekrany.
 - [ ] Wyjście lokalne splotu — na stacjonarnym jest tylko jedna karta,
       więc drogi „inne wyjście" nie dało się sprawdzić (źródło i cel
       muszą być osobnymi urządzeniami)
+- [ ] Kolejność kanałów w pętli 5.1 — przyjęta wg standardu WAVE, ale
+      niezmierzona. Sprawdzić na słuch: puścić materiał z rozpoznawalnym
+      kanałem i zobaczyć, czy filtr trafia tam, gdzie powinien
+- [ ] Czy Windows w ogóle odda 5.1 na HDMI do amplitunera — to ta sama
+      walka z downmixem, która skończyła się porażką przy poprzednim podejściu
 
 Jeśli któryś pilot nie rusza niczym na ekranie, do poprawy są numery pól
 w komunikacie wstrzykującym klawisz.

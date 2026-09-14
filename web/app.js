@@ -358,9 +358,88 @@ const TIP_STREAM_EQ =
 const TIP_STREAM_SEND =
   'Podaje amplitunerowi adres naszego strumienia przez SetAVTransportURI. '
   + 'Renderer buforuje, więc dźwięk ruszy z opóźnieniem liczonym w sekundach.';
+const TIP_STREAM_CH =
+  'Ile kanałów ma pętla. To NIE jest nasz wybór — liczbę kanałów ustawia Windows '
+  + '(Panel sterowania → Dźwięk → Konfiguruj). Stereo w systemie = stereo w pętli, '
+  + 'choćby wzmacniacz miał siedem głośników.';
+const TIP_STREAM_MAP =
+  'Który kanał pętli dostaje które filtry. Domyślna kolejność to standard WAVE '
+  + '(FL, FR, środek, LFE, tylne), ale NIE została sprawdzona na Twoim sprzęcie — '
+  + 'stacjonarny ma tylko wyjście stereo. Zweryfikuj na słuch i popraw, jeśli trzeba.';
 const TIP_STREAM_HEAD =
   'Ile zostało do obcięcia na wyjściu filtra. Wartość ujemna oznacza, że korekcja '
   + 'przesterowuje sygnał — obniż wzmocnienie kanału w Equalizerze.';
+
+const CH_NAMES = { FL: 'Front L', FR: 'Front R', C: 'Center', SL: 'Surround L',
+                   SR: 'Surround R', SW: 'Subwoofer (LFE)', SW2: 'Subwoofer 2' };
+
+/* Liczba kanałów to nie to samo co nazwa układu: sześć kanałów to 5.1,
+   bo LFE liczy się jako ta ".1", a nie jako pełne pasmo. */
+const LAYOUTS = { 1: 'mono', 2: 'stereo', 4: '4.0', 6: '5.1', 8: '7.1' };
+const layoutName = (n) => LAYOUTS[n] || (n + ' kan.');
+
+/* Ile kanałów daje wybrane urządzenie. Przed startem patrzymy na urządzenie,
+   po starcie na to, co pętla naprawdę dostała. */
+function streamSourceChannels(st, d) {
+  const s = st.status || {};
+  if (s.running) return s.channels;
+  const pick = ($('#strsrc') && $('#strsrc').value) || s.source || d.default;
+  const dev = (d.speakers || []).find((x) => x.name === pick);
+  return dev ? dev.channels : 2;
+}
+
+function streamChannels(st, d, on) {
+  const s = st.status || {};
+  const n = streamSourceChannels(st, d);
+  const map = s.mapping || (st.default_mappings || {})[String(n)] || { 0: 'FL', 1: 'FR' };
+  const eqch = st.eq_channels || ['FL', 'FR', 'C', 'SL', 'SR', 'SW', 'SW2'];
+
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    const sel = map[String(i)] || map[i] || '';
+    rows.push(`<label style="display:flex;gap:6px;align-items:center;font-size:11.5px">
+      <span class="mono dim" style="width:16px;text-align:right">${i}</span>
+      <select data-map="${i}" style="flex-grow:1">
+        <option value="">— bez filtrów —</option>
+        ${eqch.map((c) => `<option value="${c}"${c === sel ? ' selected' : ''}>${esc(CH_NAMES[c] || c)}</option>`).join('')}
+      </select></label>`);
+  }
+
+  // Dwa twarde ograniczenia, oba ustalone pomiarowo — lepiej, żeby stały
+  // przed oczami, niż żeby ktoś liczył na 5.1 tam, gdzie go nie będzie.
+  const stereoOnly = n <= 2;
+  const warn = stereoOnly
+    ? `<div class="banner bad" style="margin-top:10px"><div class="grow">
+         <div class="t">Pętla jest stereo — splot obejmie tylko front</div>
+         <div class="d">Windows oddaje na to wyjście dwa kanały, więc środek, surroundy i LFE
+         w ogóle tu nie docierają. Żeby korygować 5.1, trzeba w systemie
+         (Panel sterowania → Dźwięk → Konfiguruj) ustawić 5.1 na wyjściu HDMI idącym
+         do amplitunera i wybrać je jako źródło <b>oraz</b> jako wyjście lokalne.</div></div></div>`
+    : `<div class="banner" style="margin-top:10px"><div class="grow">
+         <div class="t">Pętla ma ${n} kanałów (${layoutName(n)}) — splot obejmie wszystkie</div>
+         <div class="d">Droga przez UPnP i tak zejdzie do stereo (renderer amplitunera jest
+         stereo — w jego liście formatów <span class="mono">audio/L16</span> kończy się na
+         dwóch kanałach). Pełne ${layoutName(n)} przejdzie wyłącznie przez wyjście lokalne.</div></div></div>`;
+
+  return `
+    <div style="margin-top:12px">
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <span class="k"${rawTip(TIP_STREAM_CH, 'Kanały pętli')}>KANAŁY</span>
+        <span class="mono teal">${n}</span>
+        ${s.downmixed ? '<span class="mono faint" style="font-size:10.5px">HTTP: downmix do 2</span>' : ''}
+        <div class="grow"></div>
+        <span class="k"${rawTip(TIP_STREAM_MAP, 'Mapowanie')}>PRZYPISANIE FILTRÓW</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:7px">${rows.join('')}</div>
+      ${warn}
+      <div class="faint" style="font-size:11px;margin-top:9px;line-height:1.5">
+        <b>Drugiego subwoofera nie da się stąd skorygować.</b> Z komputera wychodzi jeden
+        kanał LFE; rozdział na SW1 i SW2 robi wzmacniacz w środku. Różnicę między Twoimi
+        subami wyrówna tylko Audyssey Sub EQ HT albo plik <span class="mono">.ady</span> —
+        nie ten splot.
+      </div>
+    </div>`;
+}
 
 function cardStream() {
   const st = STREAM;
@@ -406,6 +485,8 @@ function cardStream() {
 
     ${s.error ? `<div class="banner bad" style="margin-top:11px"><div class="grow"><div class="d">${esc(s.error)}</div></div></div>` : ''}
 
+    ${streamChannels(st, d, on)}
+
     ${on ? `
     <div id="strmeter" class="mono" style="font-size:11.5px;margin-top:12px;display:flex;gap:16px;flex-wrap:wrap">${streamMeter(s)}</div>
     <div class="mono faint" style="font-size:11px;margin-top:6px">${esc(st.url || '')}</div>
@@ -449,6 +530,14 @@ function streamTick() {
       box.innerHTML = streamMeter(s);
     } catch (e) { /* chwilowy brak serwera nie jest powodem do krzyku */ }
   }, 1000);
+}
+
+function readStreamMapping() {
+  const out = {};
+  document.querySelectorAll('[data-map]').forEach((sel) => {
+    if (sel.value) out[sel.dataset.map] = sel.value;
+  });
+  return Object.keys(out).length ? out : null;
 }
 
 async function loadStream() {
@@ -2326,13 +2415,24 @@ function bind() {
     if (act === 'start') b.onclick = () => streamAction('start', {
       source: $('#strsrc') ? $('#strsrc').value : '',
       sink: $('#strsink') ? $('#strsink').value : '',
-      eq: $('#streq') ? $('#streq').checked : true
+      eq: $('#streq') ? $('#streq').checked : true,
+      mapping: readStreamMapping()
     });
     else if (act === 'stop') b.onclick = () => streamAction('stop');
     else if (act === 'send') b.onclick = () => streamAction('send');
   });
   const streq = $('#streq');
   if (streq) streq.onchange = () => streamAction('eq', { on: streq.checked });
+  // Zmiana źródła przed startem może zmienić liczbę kanałów — przerysuj listę.
+  const strsrc = $('#strsrc');
+  if (strsrc) strsrc.onchange = () => render();
+  view.querySelectorAll('[data-map]').forEach((sel) => {
+    sel.onchange = () => {
+      if (STREAM && STREAM.status && STREAM.status.running) {
+        streamAction('mapping', { mapping: readStreamMapping() });
+      }
+    };
+  });
   if ($('#strmeter')) streamTick();
 
   // suwak głośności: w trakcie ciągnięcia tylko odczyt, komenda dopiero po puszczeniu

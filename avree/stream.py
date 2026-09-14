@@ -97,6 +97,39 @@ def _require() -> None:
 BLOCK = 1024              # próbek na blok — 21,3 ms przy 48 kHz
 QUEUE_BLOCKS = 24         # ile bloków trzymamy dla odbiorcy (~0,5 s)
 
+# Kolejność kanałów w strumieniu WASAPI. To porządek z formatu WAVE
+# (SPEAKER_FRONT_LEFT, SPEAKER_FRONT_RIGHT, SPEAKER_FRONT_CENTER,
+# SPEAKER_LOW_FREQUENCY, SPEAKER_BACK_LEFT, SPEAKER_BACK_RIGHT).
+#
+# UWAGA: ta kolejność jest ZAŁOŻONA, nie zmierzona na tym sprzęcie —
+# stacjonarny ma tylko wyjście stereo, więc nie było czego sprawdzić.
+# Dlatego mapowanie da się poprawić ręcznie w interfejsie: wystarczy
+# puścić materiał testowy i posłuchać, który głośnik odpowiada któremu
+# kanałowi. Domyślne ustawienie to punkt wyjścia, nie wyrocznia.
+DEFAULT_MAPPING = {
+    1: {0: "C"},
+    2: {0: "FL", 1: "FR"},
+    4: {0: "FL", 1: "FR", 2: "SL", 3: "SR"},
+    6: {0: "FL", 1: "FR", 2: "C", 3: "SW", 4: "SL", 5: "SR"},
+    # 7.1: po LFE idą kanały tylne, dopiero potem boczne. Equalizer nie ma
+    # osobnych pasm dla tylnych, więc 6 i 7 lecą bez filtrów.
+    8: {0: "FL", 1: "FR", 2: "C", 3: "SW", 4: "SL", 5: "SR"},
+}
+
+# Zejście z wielokanału do stereo — droga przez UPnP inaczej nie istnieje,
+# bo renderer X3300W jest stereo (zmierzone: audio/L16 maks. 2 kanały).
+# Współczynniki wg ITU-R BS.775: środek i surroundy po -3 dB, LFE pomijamy,
+# bo w stereo nie ma go gdzie posłać, a dodany do obu kanałów tylko
+# przesterowuje sumę.
+DOWNMIX_GAIN = {"C": 0.7071, "SL": 0.7071, "SR": 0.7071}
+
+
+def default_mapping(channels: int) -> dict[int, str]:
+    """Domyślne przypisanie kanałów strumienia do pasm equalizera."""
+    if channels in DEFAULT_MAPPING:
+        return dict(DEFAULT_MAPPING[channels])
+    return {i: name for i, name in enumerate(["FL", "FR"][:channels])}
+
 
 def devices() -> dict:
     """Urządzenia wyjściowe — każde może być i źródłem pętli, i celem."""
@@ -135,7 +168,10 @@ class LoopbackStream:
     def __init__(self) -> None:
         self.fs = 48000
         self.channels = 2
+        self.mapping: dict[int, str] = default_mapping(2)
+        self.design = None
         self.filter = MultiChannelFilter(self.fs, self.channels)
+        self.downmix: np.ndarray | None = None   # macierz do stereo dla HTTP
         self.running = False
         self.source = ""
         self.sink = ""                # "" = tylko HTTP
@@ -153,7 +189,40 @@ class LoopbackStream:
 
     def configure(self, design, mapping: dict[int, str] | None = None) -> None:
         """Podpina projekt equalizera. Można w trakcie grania."""
-        self.filter.configure(design, mapping or {0: "FL", 1: "FR"})
+        if mapping is not None:
+            self.mapping = {int(k): v for k, v in mapping.items() if v}
+        self.design = design
+        self.filter.configure(design, self.mapping)
+        self.downmix = self._downmix_matrix()
+
+    def _downmix_matrix(self) -> np.ndarray | None:
+        """Macierz zejścia do stereo dla drogi HTTP.
+
+        Potrzebna, bo renderer sieciowy amplitunera jest stereo — zmierzone,
+        jego lista formatów kończy się na `audio/L16;channels=2`. Bez tego
+        materiał 5.1 wysłany po UPnP zgubiłby środek i surroundy, czyli
+        większość dialogu.
+        """
+        if self.channels <= 2:
+            return None
+        matrix = np.zeros((self.channels, 2), dtype=np.float64)
+        for index in range(self.channels):
+            name = self.mapping.get(index, "")
+            if name == "FL":
+                matrix[index, 0] = 1.0
+            elif name == "FR":
+                matrix[index, 1] = 1.0
+            elif name in DOWNMIX_GAIN:
+                gain = DOWNMIX_GAIN[name]
+                if name.endswith("L"):
+                    matrix[index, 0] = gain
+                elif name.endswith("R"):
+                    matrix[index, 1] = gain
+                else:                                # środek idzie w oba
+                    matrix[index, :] = gain
+            # SW/SW2 świadomie pomijamy: w stereo nie ma dokąd ich posłać,
+            # a dodane do obu kanałów tylko przesterowują sumę.
+        return matrix
 
     def set_enabled(self, on: bool) -> None:
         self.filter.enabled = bool(on)
@@ -192,7 +261,9 @@ class LoopbackStream:
 
     # ---- praca ---------------------------------------------------------
 
-    def start(self, source: str = "", sink: str = "", fs: int = 48000) -> dict:
+    def start(self, source: str = "", sink: str = "", fs: int = 48000,
+              channels: int = 0,
+              mapping: dict[int, str] | None = None) -> dict:
         _require()
         if self.running:
             return {"ok": False, "error": "strumień już działa"}
@@ -210,12 +281,29 @@ class LoopbackStream:
                     "źródło i cel to to samo urządzenie — powstałoby "
                     "sprzężenie. Wskaż inne wyjście albo zostaw tylko HTTP.")
 
+        # Liczba kanałów idzie Z URZĄDZENIA, nie z założenia. Windows
+        # ustawiony na 5.1 daje sześciokanałową pętlę; ustawiony na stereo
+        # daje dwa kanały i żadne nasze życzenie tego nie zmieni — to
+        # ustawienie systemowe, nie parametr przechwytywania.
+        available = int(speakers[source].channels or 2)
+        if sink:
+            available = min(available, int(speakers[sink].channels or 2))
+        self.channels = int(channels) if channels else available
+        if self.channels > available:
+            raise StreamError(
+                f"urządzenie daje {available} kanałów, nie {self.channels}. "
+                "Liczbę kanałów ustawia się w Windows: Panel sterowania → "
+                "Dźwięk → Konfiguruj.")
+
         self.fs = fs
         self.source, self.sink = source, sink
+        self.mapping = ({int(k): v for k, v in mapping.items() if v}
+                        if mapping else default_mapping(self.channels))
         self.error = ""
         self.blocks = self.dropped = 0
         self.load = 0.0
         self.filter = MultiChannelFilter(fs, self.channels)
+        self.downmix = self._downmix_matrix()
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -268,8 +356,11 @@ class LoopbackStream:
                         if player is not None:
                             player.play(out.astype(np.float32))
                         if self._clients:
+                            # Droga HTTP jest stereo, bo renderer jest stereo.
+                            wire = out if self.downmix is None else np.clip(
+                                out @ self.downmix, -1.0, 1.0)
                             self._publish(
-                                (out * 32767.0).astype("<i2").tobytes())
+                                (wire * 32767.0).astype("<i2").tobytes())
 
                         dt = time.perf_counter() - t0
                         self.load = 0.9 * self.load + 0.1 * (dt / budget)
@@ -291,6 +382,9 @@ class LoopbackStream:
             "sink": self.sink,
             "samplerate": self.fs,
             "channels": self.channels,
+            "mapping": {str(k): v for k, v in sorted(self.mapping.items())},
+            "wire_channels": 2 if self.downmix is not None else self.channels,
+            "downmixed": self.downmix is not None,
             "eq_enabled": self.filter.enabled,
             "blocks": self.blocks,
             "dropped": self.dropped,

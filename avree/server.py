@@ -788,7 +788,10 @@ class Handler(BaseHTTPRequestHandler):
         except stream_mod.StreamError as e:
             devs = {"available": False, "error": str(e), "speakers": []}
         return {"devices": devs, "status": self.app.stream.status(),
-                "url": self._stream_url()}
+                "url": self._stream_url(),
+                "eq_channels": eq.EQ_CHANNELS,
+                "default_mappings": {str(k): v for k, v
+                                     in stream_mod.DEFAULT_MAPPING.items()}}
 
     def _stream_url(self) -> str:
         host_ip = upnp.local_ip_towards(self.app.avr.host)
@@ -801,7 +804,9 @@ class Handler(BaseHTTPRequestHandler):
         if action == "start":
             st.start(source=str(body.get("source", "")),
                      sink=str(body.get("sink", "")),
-                     fs=int(body.get("samplerate", 48000)))
+                     fs=int(body.get("samplerate", 48000)),
+                     channels=int(body.get("channels", 0) or 0),
+                     mapping=body.get("mapping") or None)
             st.configure(self.app.eq)
             st.set_enabled(bool(body.get("eq", True)))
         elif action == "stop":
@@ -811,6 +816,8 @@ class Handler(BaseHTTPRequestHandler):
             st.set_enabled(bool(body.get("on", True)))
         elif action == "reload":
             st.configure(self.app.eq)
+        elif action == "mapping":
+            st.configure(self.app.eq, body.get("mapping") or None)
         elif action == "send":
             # Podajemy amplitunerowi adres naszego nieskończonego WAV-a.
             if not st.running:
@@ -853,7 +860,8 @@ class Handler(BaseHTTPRequestHandler):
 
         q = st.subscribe()
         try:
-            self.wfile.write(stream_mod.wav_header(st.fs, st.channels))
+            wire = 2 if st.downmix is not None else st.channels
+            self.wfile.write(stream_mod.wav_header(st.fs, wire))
             self.wfile.flush()
             while st.running:
                 try:
