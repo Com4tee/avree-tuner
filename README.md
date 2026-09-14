@@ -63,11 +63,56 @@ python tools/mapper.py <ip>          # mapowanie nieudokumentowanych komend
 |---|---|
 | 0 | Diagnostyka: zrzut stanu + pomiar różnicowy Audyssey ON/OFF |
 | 1 | Sterownik i GUI — pełna kontrola nad AVR ✔ |
-| 2 | Odtwarzanie plików przez DLNA ✔ · pętla WASAPI dla przeglądarki |
+| 2 | Odtwarzanie plików przez DLNA ✔ · pętla WASAPI ze splotem ✔ |
 | 3 | Silnik pomiarowy — sweep, dekonwolucja, analiza ✔ |
 | 4 | Wejście audio i wizualizacja z mikrofonu ✔ |
 | 5 | Własny optymalizator filtrów ✔ |
 | 6 | Parser `.ady` i upload kalibracji do amplitunera |
+
+## Splot w torze PC
+
+Zakładka **Odtwarzanie**, karta „Dźwięk z komputera". Pętla WASAPI przechwytuje
+wszystko, co gra Windows, przepuszcza przez filtry z zakładki **Equalizer**
+(kanały FL i FR) i wypuszcza dalej. Nie wymaga wtyczek do foobara ani niczego
+innego — działa też dla przeglądarki i gier.
+
+Dwie drogi wyjścia:
+
+| Droga | Opóźnienie | Do czego |
+|---|---|---|
+| Nieskończony WAV po HTTP → UPnP amplitunera | sekundy (renderer buforuje) | muzyka |
+| Inne lokalne wyjście (optyka, HDMI) | dziesiątki ms | film |
+
+Zmierzone na tym komputerze i na **Denon AVR-X3300W**:
+
+- Odpowiedź filtrów zgodna z projektem co do **0,0000 dB** w paśmie 20 Hz – 16 kHz.
+- Przetwarzanie blokowe identyczne z przetworzeniem całości: różnica **0,00e+00**.
+- **0,091 ms** na blok 1024 próbek przy budżecie 21,3 ms — zapas **234×**.
+- Strumień HTTP dostarczył **2,01 s dźwięku w 2,00 s**, zero zgubionych bloków
+  przez 87 sekund z amplitunerem jako odbiorcą.
+- Amplituner raportuje `PLAYING` i liczy czas — w jego liście formatów są
+  `audio/wav` i `audio/L16;rate=48000;channels=2`.
+
+Zmiana pasm w equalizerze wchodzi na żywo: filtry są podmieniane bez zerowania
+pamięci, więc nie ma stuknięcia. Zerowanie następuje tylko wtedy, gdy zmieni
+się LICZBA filtrów — wtedy starej pamięci nie ma dokąd przenieść.
+
+**Głośność systemowa musi stać na maksimum.** Pętla WASAPI słyszy dźwięk *po*
+suwaku Windows: ściszony system to cichszy strumień i gorszy stosunek do szumu
+po konwersji na 16 bitów. Regulować należy amplitunerem.
+
+### Dlaczego dwie biblioteki dźwiękowe
+
+`sounddevice` **nie umie pętli WASAPI** w wersji 0.5.6 — jego `WasapiSettings`
+ma tylko `exclusive`, `auto_convert` i `explicit_sample_format`, a otwarcie
+wyjścia jako wejścia kończy się błędem `Invalid number of channels`. Sprawdzone.
+Dlatego splot używa `soundcard`, a tor pomiarowy zostaje przy `sounddevice`,
+gdzie potrzebne jest granie i nagrywanie na wspólnym zegarze (`playrec`).
+
+`soundcard` inicjuje COM tylko na wątku, który go zaimportował. Serwer WWW
+obsługuje każde żądanie na nowym wątku, więc `avree/stream.py` wchodzi do COM
+jawnie na każdym wątku — bez tego pierwsze wejście w zakładkę kończy się
+błędem `0x800401f0`.
 
 ## Ograniczenia ustalone empirycznie
 
@@ -112,6 +157,11 @@ w innym pokoju niż ekrany.
 - [ ] Telewizor `192.168.0.17` — wysłane INFO, BACK i napis na ekranie
 - [ ] Google TV `192.168.0.58` — wysłane HOME, strzałki w czterech kierunkach
 - [ ] Blokada auto-wyłączania — potwierdzenia wymaga dopiero dłuższy seans
+- [ ] Splot w torze PC **na ucho** — poprawność liczbowa i transport są
+      zmierzone, ale nikt jeszcze nie słuchał wyniku przez głośniki
+- [ ] Wyjście lokalne splotu — na stacjonarnym jest tylko jedna karta,
+      więc drogi „inne wyjście" nie dało się sprawdzić (źródło i cel
+      muszą być osobnymi urządzeniami)
 
 Jeśli któryś pilot nie rusza niczym na ekranie, do poprawy są numery pól
 w komunikacie wstrzykującym klawisz.

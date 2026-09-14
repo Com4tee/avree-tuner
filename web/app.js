@@ -6,6 +6,7 @@
 
 let STATE = {};
 let RENDERER = null;
+let STREAM = null;
 let SCAN = null;
 let TAB = 'pulpit';
 let toastTimer = null;
@@ -338,6 +339,146 @@ function volumeCard() {
 
 /* ---------- widok: Odtwarzanie ---------- */
 
+/* ---------- splot w torze PC ----------
+   Pętla WASAPI łapie to, co gra Windows, filtr z zakładki Equalizer robi
+   swoje, a wynik leci do amplitunera nieskończonym WAV-em przez UPnP.
+   Opóźnienie renderera idzie w sekundy - do muzyki dobre, do filmu nie. */
+
+const TIP_STREAM_SRC =
+  'Urządzenie wyjściowe, którego podsłuchujemy. Windows ma grać właśnie do niego — '
+  + 'pętla WASAPI słyszy dokładnie to, co trafia na to wyjście, ze wszystkich programów naraz.';
+const TIP_STREAM_SINK =
+  'Opcjonalne wyjście, na które wraca przetworzony dźwięk — np. optyczne albo HDMI idące '
+  + 'do amplitunera. Opóźnienie rzędu kilkudziesięciu ms, więc nadaje się też do filmu. '
+  + 'Musi to być INNE urządzenie niż źródło, inaczej powstałoby sprzężenie. '
+  + 'Puste = tylko strumień HTTP.';
+const TIP_STREAM_EQ =
+  'Włącza filtry z zakładki Equalizer (kanały FL i FR) na strumieniu. '
+  + 'Wyłączenie przepuszcza dźwięk bez zmian — dobre do porównania na ucho.';
+const TIP_STREAM_SEND =
+  'Podaje amplitunerowi adres naszego strumienia przez SetAVTransportURI. '
+  + 'Renderer buforuje, więc dźwięk ruszy z opóźnieniem liczonym w sekundach.';
+const TIP_STREAM_HEAD =
+  'Ile zostało do obcięcia na wyjściu filtra. Wartość ujemna oznacza, że korekcja '
+  + 'przesterowuje sygnał — obniż wzmocnienie kanału w Equalizerze.';
+
+function cardStream() {
+  const st = STREAM;
+  if (!st) {
+    setTimeout(loadStream, 0);
+    return '<div class="card"><h3>DŹWIĘK Z KOMPUTERA</h3><div class="dim">sprawdzam…</div></div>';
+  }
+
+  const d = st.devices || {};
+  if (!d.available) {
+    return `<div class="card"><h3>DŹWIĘK Z KOMPUTERA</h3>
+      <div class="dim" style="font-size:13px">${esc(d.error || 'brak dostępu do kart dźwiękowych')}</div>
+      <div class="faint" style="font-size:11px;margin-top:8px">Zainstaluj: <span class="mono">pip install soundcard</span></div></div>`;
+  }
+
+  const s = st.status || {};
+  const on = !!s.running;
+  const opts = (sel) => (d.speakers || []).map((sp) =>
+    `<option value="${esc(sp.name)}"${sp.name === sel ? ' selected' : ''}>${esc(sp.name)}${sp.default ? ' — domyślne' : ''}</option>`).join('');
+
+  return `
+  <div class="card">
+    <h3>DŹWIĘK Z KOMPUTERA — SPLOT W TORZE</h3>
+
+    <div class="row" style="margin-bottom:10px">
+      <span class="k"${rawTip(TIP_STREAM_SRC, 'Źródło pętli')}>Podsłuchuję</span>
+      <span class="v"><select id="strsrc" ${on ? 'disabled' : ''} style="width:100%">${opts(s.source || d.default)}</select></span>
+      <span class="k"${rawTip(TIP_STREAM_SINK, 'Wyjście lokalne')}>Wyjście lokalne</span>
+      <span class="v"><select id="strsink" ${on ? 'disabled' : ''} style="width:100%">
+        <option value="">— tylko strumień HTTP —</option>${opts(s.sink || '')}</select></span>
+    </div>
+
+    <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+      ${on
+        ? '<button class="btn" data-str="stop">Zatrzymaj</button>'
+        : '<button class="btn primary" data-str="start">Uruchom</button>'}
+      <button class="btn" data-str="send" ${on ? '' : 'disabled'}${rawTip(TIP_STREAM_SEND, 'Wyślij do amplitunera')}>Wyślij do amplitunera</button>
+      <div class="grow"></div>
+      <label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer"${rawTip(TIP_STREAM_EQ, 'Korekcja')}>
+        <input type="checkbox" id="streq" ${s.eq_enabled ? 'checked' : ''} ${on ? '' : 'disabled'}> korekcja z Equalizera
+      </label>
+    </div>
+
+    ${s.error ? `<div class="banner bad" style="margin-top:11px"><div class="grow"><div class="d">${esc(s.error)}</div></div></div>` : ''}
+
+    ${on ? `
+    <div id="strmeter" class="mono" style="font-size:11.5px;margin-top:12px;display:flex;gap:16px;flex-wrap:wrap">${streamMeter(s)}</div>
+    <div class="mono faint" style="font-size:11px;margin-top:6px">${esc(st.url || '')}</div>
+    ` : ''}
+
+    <div class="faint" style="font-size:11px;margin-top:11px;line-height:1.5">
+      Pętla WASAPI łapie wszystko, co gra Windows — foobar, przeglądarkę, grę — i przepuszcza
+      przez filtry z zakładki Equalizer. Głośność systemowa powinna stać na maksimum:
+      pętla słyszy dźwięk <b>po</b> suwaku Windows, więc ściszony system to cichszy strumień.
+      Droga przez UPnP ma opóźnienie liczone w sekundach (renderer buforuje) — do muzyki
+      w porządku, do filmu nie. Do filmu służy wyjście lokalne.
+    </div>
+  </div>`;
+}
+
+/* Mierniki odświeżamy w miejscu, bez przerysowania całej karty: pełny render
+   gasiłby dymek pod kursorem i zrzucał otwartą listę urządzeń co sekundę. */
+
+function streamMeter(s) {
+  return `
+      <span class="dim">wejście <b class="${s.input_peak_db > -60 ? 'teal' : 'dim'}">${s.input_peak_db > -120 ? s.input_peak_db + ' dB' : 'cisza'}</b></span>
+      <span class="dim"${rawTip(TIP_STREAM_HEAD, 'Zapas')}>zapas <b class="${s.headroom_db < 0 ? 'bad' : ''}">${s.headroom_db} dB</b></span>
+      <span class="dim">obciążenie <b>${s.load_percent}%</b></span>
+      <span class="dim">odbiorcy <b>${s.clients}</b></span>
+      <span class="dim">czas <b>${s.seconds} s</b></span>
+      ${s.dropped ? `<span class="dim">zgubione bloki <b>${s.dropped}</b></span>` : ''}`;
+}
+
+let streamTimer = null;
+
+function streamTick() {
+  clearInterval(streamTimer);
+  streamTimer = setInterval(async () => {
+    const box = $('#strmeter');
+    if (TAB !== 'odtwarzanie' || !box) return;       // karta niewidoczna, nie pytamy
+    try {
+      const data = await api('/api/stream');
+      STREAM = data;
+      const s = data.status || {};
+      if (!s.running) { render(); return; }          // strumień padł — przerysuj przyciski
+      box.innerHTML = streamMeter(s);
+    } catch (e) { /* chwilowy brak serwera nie jest powodem do krzyku */ }
+  }, 1000);
+}
+
+async function loadStream() {
+  try {
+    STREAM = await api('/api/stream');
+  } catch (e) {
+    STREAM = { devices: { available: false, error: e.message }, status: {} };
+  }
+  if (TAB === 'odtwarzanie') render();
+}
+
+async function streamAction(action, extra) {
+  const payload = Object.assign({ action: action }, extra || {});
+  try {
+    STREAM = await api('/api/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (TAB === 'odtwarzanie') render();
+    if (action === 'send') {
+      toast('Amplituner dostał adres strumienia', true);
+      setTimeout(loadRenderer, 1200);
+    }
+  } catch (e) {
+    toast(e.message, false);
+    loadStream();
+  }
+}
+
 function viewOdtwarzanie() {
   const r = RENDERER;
   const np = STATE.now_playing;
@@ -379,6 +520,8 @@ function viewOdtwarzanie() {
           <button class="btn" data-act="reload-renderer">Odśwież</button>
         </div>
       </div>
+
+      ${cardStream()}
 
       <div class="card">
         <h3>WYŚLIJ PLIK DO AMPLITUNERA</h3>
@@ -856,7 +999,7 @@ function viewEqualizer() {
 
   const dest = [
     ['preview', 'Podgląd', 'Tylko rysunek na tle pomiaru. Nic nie trafia do dźwięku — służy do projektowania korekcji.'],
-    ['pc', 'Tor PC', 'Splot w strumieniu wychodzącym z komputera przez TOSLINK lub DLNA, przy Audyssey wyłączonym. Pełna kontrola nad filtrami, ale działa tylko dla dźwięku z komputera. Silnik DSP powstanie w następnej kolejności.'],
+    ['pc', 'Tor PC', 'Splot w strumieniu wychodzącym z komputera — pętla systemowa Windows przez filtry i dalej do amplitunera. Działa: uruchamia się w zakładce Odtwarzanie, karta „Dźwięk z komputera". Zmiany pasm wchodzą na żywo, bez restartu strumienia. Obejmuje wyłącznie dźwięk z komputera, za to niezależnie od Audyssey.'],
     ['ady', 'DSP Audyssey', 'Wgranie filtrów do procesora amplitunera przez plik .ady. Działa dla każdego źródła, ale wymaga zbudowania kanału uploadu — to ostatni etap projektu.'],
   ];
 
@@ -2177,6 +2320,20 @@ function bind() {
     else if (act === 'raw') b.onclick = () => sendRaw();
     else if (act === 'play') b.onclick = () => sendPlay();
   });
+
+  view.querySelectorAll('[data-str]').forEach((b) => {
+    const act = b.dataset.str;
+    if (act === 'start') b.onclick = () => streamAction('start', {
+      source: $('#strsrc') ? $('#strsrc').value : '',
+      sink: $('#strsink') ? $('#strsink').value : '',
+      eq: $('#streq') ? $('#streq').checked : true
+    });
+    else if (act === 'stop') b.onclick = () => streamAction('stop');
+    else if (act === 'send') b.onclick = () => streamAction('send');
+  });
+  const streq = $('#streq');
+  if (streq) streq.onchange = () => streamAction('eq', { on: streq.checked });
+  if ($('#strmeter')) streamTick();
 
   // suwak głośności: w trakcie ciągnięcia tylko odczyt, komenda dopiero po puszczeniu
   const slider = $('#volslider');

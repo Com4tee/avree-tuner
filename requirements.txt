@@ -1,7 +1,15 @@
-# Rdzeń nie ma zależności - telnet i HTTP na stdlib.
-# GUI (etap 2):
-fastapi>=0.115
-uvicorn[standard]>=0.32
-# Analiza pomiarów (etap 3):
+# Rdzeń nie ma zależności — sterowanie amplitunerem, wyszukiwanie w sieci,
+# UPnP, Cast, webOS, Android TV i sam serwer WWW stoją na bibliotece
+# standardowej. Aplikacja uruchomi się bez niczego z tej listy; wyłączone
+# będą tylko te zakładki, które czegoś potrzebują, i powiedzą o tym wprost.
+
+# Pomiar i projektowanie korekcji (zakładki Pomiar i Equalizer):
 numpy>=2.1
 scipy>=1.14
+sounddevice>=0.5          # odtwarzanie sweepu i nagrywanie na wspólnym zegarze
+
+# Splot w torze PC (zakładka Odtwarzanie, karta „Dźwięk z komputera"):
+soundcard>=0.4            # pętla WASAPI — sounddevice jej nie wystawia
+
+# Parowanie z Android TV / Google TV (certyfikat klienta do TLS):
+cryptography>=43

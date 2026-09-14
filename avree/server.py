@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import queue
 import secrets
 import threading
 import time
@@ -18,7 +19,8 @@ from pathlib import Path
 from typing import Any
 
 from . import (androidtv, cast, discovery, eq,
-               projector as projector_mod, session as session_mod, upnp, webos)
+               projector as projector_mod, session as session_mod,
+               stream as stream_mod, upnp, webos)
 from .avr import (
     CROSSOVER_FREQS,
     OSD_KEYS,
@@ -85,6 +87,8 @@ class App:
         self.channel_scan: Any = None
         self.projector_scan = {"running": False, "found": [], "note": ""}
         self.cast = cast.CastHub()
+        # Splot w torze PC: pętla systemowa -> filtr -> amplituner.
+        self.stream = stream_mod.LoopbackStream()
 
     def ensure_renderer(self) -> upnp.Renderer | None:
         if self.renderer is None and self.renderer_error is None:
@@ -190,6 +194,10 @@ class Handler(BaseHTTPRequestHandler):
                         "note": self.app.webos.scan_note,
                         "scanning": self.app.webos.scanning,
                         "buttons": webos.PointerInput.BUTTONS})
+        elif route == "/api/stream":
+            self._json(self._stream_payload())
+        elif route == "/stream.wav":
+            self._serve_stream()
         elif route.startswith("/media/"):
             self._serve_media(route[len("/media/"):])
         else:
@@ -287,6 +295,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(self._connect(body))
             elif route == "/api/eq":
                 self._json(self._eq_save(body))
+            elif route == "/api/stream":
+                self._json(self._stream_action(body))
             elif route == "/api/projector":
                 self._json(self._projector_action(body))
             elif route == "/api/projector/scan":
@@ -761,9 +771,115 @@ class Handler(BaseHTTPRequestHandler):
         design = eq.EqDesign.from_dict(body.get("design") or {})
         self.app.eq = design
         eq.save(design)
+        # Strumień w torze PC ma słuchać tych filtrów od razu. Przeliczenie
+        # współczynników jest tanie, a stan filtrów zostaje — zmiana pasma
+        # w trakcie grania nie trzaska.
+        if self.app.stream.running:
+            self.app.stream.configure(design)
         payload = self._eq_payload()
         payload["ok"] = True
         return payload
+
+    # ---- splot w torze PC ----------------------------------------------
+
+    def _stream_payload(self) -> dict[str, Any]:
+        try:
+            devs = stream_mod.devices()
+        except stream_mod.StreamError as e:
+            devs = {"available": False, "error": str(e), "speakers": []}
+        return {"devices": devs, "status": self.app.stream.status(),
+                "url": self._stream_url()}
+
+    def _stream_url(self) -> str:
+        host_ip = upnp.local_ip_towards(self.app.avr.host)
+        return f"http://{host_ip}:{self.app.port}/stream.wav"
+
+    def _stream_action(self, body: dict[str, Any]) -> dict[str, Any]:
+        st = self.app.stream
+        action = str(body.get("action", ""))
+
+        if action == "start":
+            st.start(source=str(body.get("source", "")),
+                     sink=str(body.get("sink", "")),
+                     fs=int(body.get("samplerate", 48000)))
+            st.configure(self.app.eq)
+            st.set_enabled(bool(body.get("eq", True)))
+        elif action == "stop":
+            st.stop()
+        elif action == "eq":
+            st.configure(self.app.eq)
+            st.set_enabled(bool(body.get("on", True)))
+        elif action == "reload":
+            st.configure(self.app.eq)
+        elif action == "send":
+            # Podajemy amplitunerowi adres naszego nieskończonego WAV-a.
+            if not st.running:
+                raise ValueError("najpierw uruchom strumień")
+            rend = self.app.ensure_renderer()
+            if rend is None:
+                raise ValueError(self.app.renderer_error or "renderer niedostępny")
+            url = self._stream_url()
+            upnp.play_url(rend, url, "Dźwięk z komputera (AVREE)", "audio/wav")
+            self.app.now_playing = {"title": "Dźwięk z komputera (AVREE)",
+                                    "file": "pętla systemowa", "mime": "audio/wav",
+                                    "size": 0, "url": url}
+        else:
+            raise ValueError(f"nieznana akcja: {action}")
+
+        payload = self._stream_payload()
+        payload["ok"] = True
+        return payload
+
+    def _serve_stream(self) -> None:
+        """Nieskończony WAV — gra, dopóki strumień działa albo odbiorca słucha."""
+        st = self.app.stream
+        if not st.running:
+            self.send_error(503, "stream not running")
+            return
+
+        self.send_response(200)
+        self.send_header("Content-Type", "audio/wav")
+        # Bez Content-Length i bez zakresów: długości nie znamy, a próba
+        # przewijania w strumieniu na żywo nie ma sensu. Renderer musi
+        # wiedzieć, że to transmisja, a nie plik — stąd nagłówki DLNA.
+        self.send_header("Accept-Ranges", "none")
+        self.send_header("transferMode.dlna.org", "Streaming")
+        self.send_header("contentFeatures.dlna.org",
+                         "DLNA.ORG_PN=LPCM;DLNA.ORG_OP=00;DLNA.ORG_CI=0;"
+                         "DLNA.ORG_FLAGS=8D500000000000000000000000000000")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.close_connection = True
+
+        q = st.subscribe()
+        try:
+            self.wfile.write(stream_mod.wav_header(st.fs, st.channels))
+            self.wfile.flush()
+            while st.running:
+                try:
+                    chunk = q.get(timeout=2.0)
+                except queue.Empty:
+                    continue
+                if not chunk:                        # sygnał zatrzymania
+                    break
+                self.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass                                     # odbiorca się rozłączył
+        finally:
+            st.unsubscribe(q)
+
+    def do_HEAD(self) -> None:                       # noqa: N802
+        """Renderery lubią najpierw zapytać HEAD-em, zanim pobiorą."""
+        route = urllib.parse.urlparse(self.path).path
+        if route == "/stream.wav":
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/wav")
+            self.send_header("Accept-Ranges", "none")
+            self.send_header("transferMode.dlna.org", "Streaming")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        else:
+            self.send_error(404)
 
     # ---- wyszukiwanie i przepinanie amplitunera ------------------------
 
