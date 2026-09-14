@@ -88,3 +88,104 @@ Sterowanie rzutnikiem przez **SSAP na `192.168.0.75`**. Jedno parowanie
 z potwierdzeniem na ekranie, potem stały klucz klienta. Do włączania Wake-on-LAN.
 
 Port 9741 na `.70` i szyfrowany IP Control przestają być potrzebne.
+
+
+---
+
+# Sterowanie — co udało się rozpracować
+
+## Uścisk WebSocket: pułapka z nagłówkiem Origin
+
+webOS weryfikuje `Origin` i zrywa połączenie kodem **1008 `invalid origin`**.
+Przetestowane warianty:
+
+| Origin | Wynik |
+|---|---|
+| brak nagłówka | CLOSE 1002 |
+| pusty | 1008 invalid origin |
+| `http://<host>` | 1008 invalid origin |
+| `ws://<host>:3000` | 1008 invalid origin |
+| `com.lge.test` | 1008 invalid origin |
+| **`null`** | **przechodzi** |
+| `file://` | przechodzi |
+
+## Uprawnienia zależą od manifestu przy KAŻDYM połączeniu
+
+Nie tylko przy pierwszym parowaniu. Zawężenie listy uprawnień w manifeście
+odbiera dostęp mimo ważnego klucza klienta — przekonałem się o tym, gdy
+rozszerzyłem manifest doraźnie w jednym skrypcie, a kolejny znów dostał 401.
+Lista musi być kompletna na stałe w module.
+
+## Usługi SSAP na tym modelu
+
+```
+api  audio  config  externalpq  media.controls  media.viewer
+pairing  settings  system  system.launcher  system.notifications
+timer  tv  user  webapp
+```
+
+### Co odpowiada
+
+| Endpoint | Efekt |
+|---|---|
+| `ssap://system/getSystemInfo` | model DBF510P-GL |
+| `ssap://com.webos.service.tvpower/power/getPowerState` | Active / Suspend |
+| `ssap://audio/getVolume`, `getStatus`, `setVolume`, `setMute` | głośność |
+| `ssap://tv/getExternalInputList`, `switchInput` | HDMI_1/2/3 |
+| `ssap://com.webos.applicationManager/listLaunchPoints` | 4 aplikacje |
+| `ssap://system.launcher/launch` | uruchamianie |
+| `ssap://system/turnOff` | wyłączenie |
+| `ssap://system.notifications/createToast` | napis na ekranie |
+| **`ssap://com.webos.service.networkinput/getPointerInputSocket`** | **gniazdo pilota** |
+
+### Co nie odpowiada
+
+`ssap://timer/*` — usługa figuruje na liście, ale wszystkie metody zwracają
+404. `ssap://config/getConfigs` — 401 nawet z pełnym manifestem.
+`ssap://system.launcher/getAppState` — 403. `getCurrentSWInformation` — 401.
+
+### Ustawienia systemowe
+
+`getSystemSettings` wymaga jawnej listy kluczy; sama kategoria albo pusta
+lista dają `500 Application error`. Jeden nieistniejący klucz wywala całe
+zapytanie, więc trzeba pytać pojedynczo.
+
+Istnieją na tym modelu:
+
+```
+network : deviceName = [LG] lodownia,  wolwowlOnOff = true
+picture : backlight, brightness, color, contrast
+option  : audioGuidance, country, zipcode
+```
+
+**Kluczy timerów nie ma.** Sprawdziłem 34 nazwy w 8 kategoriach
+(`autoPowerOff`, `sleepTime`, `autoStandbyMode`, `noSignalPowerOff`,
+`powerOffBySignal`, `screenOff`, `idlePowerOff` i dalsze) — zero trafień.
+Licznika auto-wyłączania po prostu nie da się ustawić po sieci.
+
+## Gniazdo pilota
+
+```
+ssap://com.webos.service.networkinput/getPointerInputSocket
+  -> ws://<host>:3000/resources/<token>/netinput.pointer.sock
+```
+
+Drugie połączenie WebSocket pod tę ścieżkę, protokół tekstowy:
+
+```
+type:button
+name:HOME
+<pusta linia>
+```
+
+Dostępne też `type:move` z `dx`/`dy`, `type:click`, `type:scroll`.
+42 nazwy przycisków — pełny pilot bez podczerwieni.
+
+## Obejście auto-wyłączania
+
+Skoro ustawienia nie ma, zerujemy licznik u źródła: `type:move` z `dx:0 dy:0`.
+Dla urządzenia to zdarzenie wejściowe, na ekranie nie dzieje się nic.
+Aplikacja wysyła je w regulowanym odstępie (domyślnie 30 min).
+
+To obejście oparte na mechanizmie działania licznika — potwierdzenia
+w praktyce wymaga dopiero dłuższy seans.

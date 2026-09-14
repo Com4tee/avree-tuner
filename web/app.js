@@ -115,6 +115,16 @@ async function poll() {
       lastSignature = signature;
       render();
     }
+    // Stan rzutnika idzie osobnym kanałem - odpytujemy tylko przy otwartej
+    // zakładce, bo każde zapytanie to ruch po WebSocket do urządzenia.
+    if (TAB === 'projektor') {
+      projTimer = (projTimer || 0) + 1;
+      if (projTimer % 5 === 0) loadProjector();
+    }
+    if (TAB === 'inne') {
+      castTick += 1;
+      if (castTick % 6 === 0) loadCast();
+    }
   } catch (e) {
     $('#conn-note').textContent = 'serwer nie odpowiada';
   }
@@ -177,6 +187,7 @@ function render() {
     else if (TAB === 'equalizer') view.innerHTML = viewEqualizer();
     else if (TAB === 'pomiar') view.innerHTML = viewPomiar();
     else if (TAB === 'projektor') view.innerHTML = viewProjektor();
+    else if (TAB === 'inne') view.innerHTML = viewInne();
     else if (TAB === 'konsola') view.innerHTML = viewKonsola();
     bind();
   });
@@ -1126,75 +1137,431 @@ function viewPomiar() {
 
 /* ================= RZUTNIK ================= */
 
+let PROJ = null;
+let projTimer = null;
+
+async function loadProjector(force) {
+  try {
+    PROJ = await api('/api/projector');
+    if (TAB === 'projektor') { lastSignature = ''; render(); }
+  } catch (e) { PROJ = { error: e.message }; }
+}
+
+function projAct(action, value) {
+  return api('/api/projector', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: action, value: value })
+  }).then(() => setTimeout(() => loadProjector(true), 600))
+    .catch((e) => toast(e.message, false));
+}
+
+async function projScan() {
+  try {
+    await api('/api/projector/scan', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  } catch (e) { toast(e.message, false); return; }
+  const t = setInterval(async () => {
+    try {
+      const r = await api('/api/projector/scan');
+      if (PROJ) PROJ.scan = r;
+      const n = $('#projscannote');
+      if (n) n.textContent = r.note || '';
+      if (!r.running) { clearInterval(t); lastSignature = ''; render(); }
+    } catch (e) { clearInterval(t); }
+  }, 800);
+}
+
 function viewProjektor() {
+  if (!PROJ) { setTimeout(loadProjector, 0);
+    return '<div class="card"><h3>RZUTNIK</h3><div class="dim">łączę…</div></div>'; }
+
+  const p = PROJ;
+  const scan = p.scan || {};
+
+  // Bez wskazanego urządzenia pokazujemy samo wyszukiwanie.
+  if (!p.host) {
+    return `
+    <div class="card">
+      <h3>WSKAŻ RZUTNIK</h3>
+      <div class="dim" style="font-size:12px;margin-bottom:12px">
+        Szukam urządzeń z otwartym portem SSAP. Kryterium jest funkcja, nie producent —
+        po adresie MAC łatwo trafić w niewłaściwe urządzenie LG.
+      </div>
+      <button class="btn primary" data-projscan="1">Szukaj urządzeń webOS</button>
+      <span class="faint" style="font-size:11px;margin-left:10px" id="projscannote">${esc(scan.note || '')}</span>
+      ${(scan.found || []).length ? `<div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">
+        ${scan.found.map((d) => `<button class="pill" data-projuse="${esc(d.host)}"
+            data-name="${esc(d.name)}" data-model="${esc(d.model)}">
+          <span class="mono">${esc(d.host)}</span>
+          <span style="margin-left:10px">${esc(d.name || '(bez nazwy)')}</span>
+          <span class="faint" style="margin-left:8px;font-size:11px">${esc(d.model || 'model nieustalony')}</span>
+        </button>`).join('')}
+      </div>` : ''}
+    </div>`;
+  }
+
+  const on = p.power === 'Active';
+  const fg = p.foreground || '';
+  // webOS nazywa aktywne wejście identyfikatorem aplikacji: com.webos.app.hdmi1
+  const fgInput = (fg.match(/hdmi(\d)/i) || [])[1];
+
   return `
-  <div class="banner">
-    <div class="grow">
-      <div class="t">Rozpoznanie zakończone — sterowanie w kolejnej sesji</div>
-      <div class="d">Rzutnik ma otwarty protokół SSAP. Nie potrzeba keycode ani szyfrowanego
-      IP Control — wystarczy jednorazowe parowanie z potwierdzeniem na ekranie.</div>
+  ${p.error ? `<div class="banner bad"><div class="grow">
+      <div class="t">Rzutnik nie odpowiada</div>
+      <div class="d">${esc(p.error)}${p.paired ? '' :
+        ' — urządzenie nie jest jeszcze sparowane. Po kliknięciu akcji pojawi się pytanie na ekranie.'}</div>
+    </div></div>` : ''}
+
+  <div class="grid" style="grid-template-columns:1fr 360px">
+    <div style="display:flex;flex-direction:column;gap:14px">
+
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <span class="dot ${on ? 'on' : 'off'}"></span>
+          <div>
+            <div style="font-size:14px;font-weight:600">${esc(p.name || 'Rzutnik')}</div>
+            <div class="mono faint" style="font-size:11px;margin-top:2px">
+              ${esc(p.model || '')} · ${esc(p.host)}${p.mac ? ' · ' + esc(p.mac) : ''}
+            </div>
+          </div>
+          <div class="grow"></div>
+          <span class="mono ${on ? 'teal' : 'dim'}" style="font-size:12px">${esc(p.power || '—')}</span>
+        </div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <button class="btn" data-projact="wake">Obudź (WoL)</button>
+          <button class="btn danger" data-projact="power_off">Wyłącz</button>
+          <button class="btn" data-projact="toast">Wyślij napis na ekran</button>
+          <div class="grow"></div>
+          <button class="btn" data-projrefresh="1">Odśwież</button>
+        </div>
+        <div class="faint" style="font-size:11px;margin-top:11px;line-height:1.5">
+          SSAP wyłącza, ale nie włącza — w czuwaniu webOS zwija interfejs sieciowy.
+          Do budzenia służy Wake-on-LAN, o ile w menu rzutnika włączone jest budzenie przez sieć.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>PILOT</h3>
+        <div class="dim" style="font-size:11px;margin-top:-6px;margin-bottom:13px;line-height:1.5">
+          Zdarzenia idą po sieci, nie podczerwienią — działa zza ściany.
+          Strzałki na klawiaturze też sterują, gdy ta zakładka jest otwarta.
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 168px 1fr;gap:14px;align-items:start">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <button class="btn" data-key="HOME">Home</button>
+            <button class="btn" data-key="MENU">Menu</button>
+            <button class="btn" data-key="SETTINGS">Ustawienia</button>
+            <button class="btn" data-key="INFO">Info</button>
+          </div>
+
+          <div class="osd-pad" style="grid-template-columns:repeat(3,52px)">
+            <span></span><button data-key="UP">&#9650;</button><span></span>
+            <button data-key="LEFT">&#9664;</button>
+            <button class="mid" data-key="ENTER">OK</button>
+            <button data-key="RIGHT">&#9654;</button>
+            <span></span><button data-key="DOWN">&#9660;</button><span></span>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <button class="btn" data-key="BACK">Wstecz</button>
+            <button class="btn" data-key="EXIT">Wyjście</button>
+            <button class="btn" data-key="GUIDE">Przewodnik</button>
+            <button class="btn" data-key="LIST">Lista</button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:6px;margin-top:14px;justify-content:center">
+          <button class="btn" data-key="REWIND">&#9664;&#9664;</button>
+          <button class="btn" data-key="PLAY">&#9654;</button>
+          <button class="btn" data-key="PAUSE">&#10074;&#10074;</button>
+          <button class="btn" data-key="STOP">&#9632;</button>
+          <button class="btn" data-key="FASTFORWARD">&#9654;&#9654;</button>
+        </div>
+
+        <div style="display:flex;gap:6px;margin-top:8px;justify-content:center">
+          <button class="btn" style="border-color:#7a3230;color:#e8635a" data-key="RED">czerwony</button>
+          <button class="btn" style="border-color:#2d5a30;color:#5fb862" data-key="GREEN">zielony</button>
+          <button class="btn" style="border-color:#6b4a1f;color:#e8a33d" data-key="YELLOW">żółty</button>
+          <button class="btn" style="border-color:#2a4568;color:#5b9bd5" data-key="BLUE">niebieski</button>
+        </div>
+      </div>
+
+      <div class="card ${p.keep_awake ? '' : 'warn'}">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="grow">
+            <div style="font-size:13px;font-weight:600">Blokada auto-wyłączania</div>
+            <div class="dim" style="font-size:11px;margin-top:3px">
+              ${p.keep_awake
+                ? 'Aktywna — rzutnik nie zgaśnie w trakcie filmu.'
+                : 'Wyłączona — rzutnik zgaśnie po swoim czasie bezczynności.'}
+            </div>
+          </div>
+          <button class="pill ${p.keep_awake ? 'on' : ''}" data-keepawake="${p.keep_awake ? '0' : '1'}">
+            ${p.keep_awake ? 'Włączona' : 'Włącz'}
+          </button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+          <span class="faint" style="font-size:11px;flex-grow:1">Odstęp między sygnałami</span>
+          <div class="seg">
+            ${[10, 20, 30, 45, 60].map((m) =>
+              `<button class="${p.keep_awake_minutes === m ? 'on' : ''}"
+                       data-keepmin="${m}">${m} min</button>`).join('')}
+          </div>
+        </div>
+
+        <div class="faint" style="font-size:11px;margin-top:12px;line-height:1.55">
+          Ustawienia licznika auto-wyłączania <b>nie ma w API</b> — przeszedłem wszystkie
+          kategorie <span class="mono">getSystemSettings</span> i żaden klucz timera na tym
+          modelu nie istnieje. Dlatego zamiast zmieniać ustawienie, zerujemy licznik
+          u źródła: aplikacja wysyła przesunięcie wskaźnika o zero pikseli. Dla rzutnika
+          to zdarzenie od pilota, dla Ciebie — nic. Żaden przycisk się nie wciska,
+          nic nie pojawia się na ekranie.
+          ${p.keep_awake_last ? `<br><br>Ostatni sygnał:
+            <span class="mono">${new Date(p.keep_awake_last * 1000).toLocaleTimeString('pl-PL')}</span>` : ''}
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>WEJŚCIA</h3>
+        ${(p.inputs || []).length ? `<div class="grid"
+             style="grid-template-columns:repeat(3,minmax(0,1fr));gap:7px">
+          ${p.inputs.map((i) => {
+            const active = fgInput && String(i.id).toLowerCase() === 'hdmi_' + fgInput;
+            return `<button class="pill ${active ? 'on' : ''}" data-projinput="${esc(i.id)}">
+              <div style="font-size:13px">${esc(i.label || i.id)}</div>
+              <div class="mono faint" style="font-size:10px;margin-top:3px">
+                ${esc(i.id)}${i.connected ? ' · podłączone' : ''}
+              </div>
+            </button>`;
+          }).join('')}
+        </div>` : '<div class="dim" style="font-size:12px">brak danych</div>'}
+      </div>
+
+      <div class="card">
+        <h3>APLIKACJE</h3>
+        ${(p.apps || []).length ? `<div class="grid"
+             style="grid-template-columns:repeat(4,minmax(0,1fr));gap:7px">
+          ${p.apps.map((a) => `<button class="pill ${fg === a.id ? 'on' : ''}"
+              data-projapp="${esc(a.id)}">${esc(a.title || a.id)}</button>`).join('')}
+        </div>` : '<div class="dim" style="font-size:12px">brak danych</div>'}
+      </div>
     </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="card">
+        <h3>GŁOŚNOŚĆ RZUTNIKA</h3>
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <span class="vol-num" style="font-size:34px">${p.volume == null ? '—' : p.volume}</span>
+          <span class="dim" style="font-size:13px">/ 100</span>
+          <div class="grow"></div>
+          <button class="btn ${p.muted ? 'danger' : ''}" data-projmute="1">
+            ${p.muted ? 'Wyciszony' : 'Mute'}
+          </button>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:13px">
+          <button class="btn" style="flex-grow:1" data-projvol="-5">−5</button>
+          <button class="btn" style="flex-grow:1" data-projvol="-1">−1</button>
+          <button class="btn" style="flex-grow:1" data-projvol="1">+1</button>
+          <button class="btn" style="flex-grow:1" data-projvol="5">+5</button>
+        </div>
+        <div class="faint" style="font-size:11px;margin-top:11px;line-height:1.45">
+          To głośnik własny rzutnika, niezależny od amplitunera. Przy graniu przez
+          zestaw trzymaj go wyciszony.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>POŁĄCZENIE</h3>
+        <div class="row">
+          <span class="k">Adres</span><span class="v ${p.connected ? 'teal' : 'red'}">${esc(p.host)}</span>
+          <span class="k">Sparowany</span><span class="v ${p.paired ? 'teal' : 'amber'}">${p.paired ? 'tak' : 'nie'}</span>
+          <span class="k">Protokół</span><span class="v">SSAP · ws://:3000</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:12px">
+          <button class="btn" data-projscan="1">Szukaj ponownie</button>
+          <span class="faint" style="font-size:11px;align-self:center" id="projscannote">${esc(scan.note || '')}</span>
+        </div>
+        ${(scan.found || []).length ? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:5px">
+          ${scan.found.map((d) => `<button class="pill ${d.host === p.host ? 'on' : ''}"
+              data-projuse="${esc(d.host)}" data-name="${esc(d.name)}" data-model="${esc(d.model)}">
+            <span class="mono">${esc(d.host)}</span>
+            <span style="margin-left:9px">${esc(d.name || '(bez nazwy)')}</span>
+          </button>`).join('')}
+        </div>` : ''}
+      </div>
+
+      <div class="card">
+        <h3>JAK TO DZIAŁA</h3>
+        <div class="faint" style="font-size:11px;line-height:1.6">
+          SSAP to JSON po WebSocket, bez szyfrowania i bez keycode. Klient napisany
+          od zera na gołym sockecie — zero zależności, jak reszta projektu.<br><br>
+          <b style="color:#9aa3ab">Pułapka, na którą się nadziałem:</b> webOS weryfikuje
+          nagłówek <span class="mono">Origin</span> i zrywa połączenie kodem 1008
+          „invalid origin" dla wszystkiego poza <span class="mono">null</span>
+          i <span class="mono">file://</span>. Brak nagłówka też nie przechodzi.<br><br>
+          Klucz klienta z parowania leży w
+          <span class="mono">%APPDATA%\\avree-tuner\\webos-keys.json</span>.
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ================= INNE URZĄDZENIA (Google Cast) ================= */
+
+let CAST = null;
+let castTick = 0;
+let CAST_TARGET = null;
+
+async function loadCast() {
+  try {
+    CAST = await api('/api/cast');
+    if (TAB === 'inne') { lastSignature = ''; render(); }
+  } catch (e) { CAST = { devices: [], note: e.message }; }
+}
+
+function castAct(host, action, value) {
+  return api('/api/cast', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ host: host, action: action, value: value })
+  }).then(() => setTimeout(loadCast, 500))
+    .catch((e) => toast(e.message, false));
+}
+
+const CAST_ICON = {
+  'głośnik': '<path d="M12 3a4 4 0 0 1 4 4v10a4 4 0 0 1-8 0V7a4 4 0 0 1 4-4z"></path><circle cx="12" cy="15" r="2.5"></circle>',
+  'telewizor': '<rect x="2" y="4" width="20" height="13" rx="2"></rect><path d="M8 21h8"></path>',
+  'grupa': '<circle cx="8" cy="9" r="3"></circle><circle cx="16" cy="9" r="3"></circle><path d="M3 20a5 5 0 0 1 10 0M11 20a5 5 0 0 1 10 0"></path>',
+  'cast': '<path d="M2 20h.01M2 16a4 4 0 0 1 4 4M2 12a8 8 0 0 1 8 8"></path><rect x="2" y="5" width="20" height="14" rx="2"></rect>',
+};
+
+function viewInne() {
+  if (!CAST) { setTimeout(loadCast, 0);
+    return '<div class="card"><h3>INNE URZĄDZENIA</h3><div class="dim">szukam…</div></div>'; }
+
+  const devices = CAST.devices || [];
+
+  if (!devices.length) {
+    return `
+    <div class="card">
+      <h3>URZĄDZENIA GOOGLE CAST</h3>
+      <div class="dim" style="font-size:12px;margin-bottom:12px;line-height:1.55">
+        Głośniki, Chromecasty i Google TV w Twojej sieci. Port 8008 oddaje dane
+        urządzenia bez żadnych poświadczeń, a protokół sterowania na 8009 też nie
+        wymaga parowania — inaczej niż rzutnik.
+      </div>
+      <button class="btn primary" data-castscan="1">Szukaj urządzeń</button>
+      <span class="faint" style="font-size:11px;margin-left:10px">${esc(CAST.note || '')}</span>
+    </div>`;
+  }
+
+  const groups = {};
+  devices.forEach((d) => { (groups[d.kind] = groups[d.kind] || []).push(d); });
+  const order = ['telewizor', 'głośnik', 'grupa', 'cast'];
+
+  const card = (d) => {
+    const icon = CAST_ICON[d.kind] || CAST_ICON.cast;
+    const playing = d.app && d.app !== 'Backdrop';
+    return `
+    <div class="card ${d.online ? '' : 'alert'}">
+      <div style="display:flex;align-items:flex-start;gap:11px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+             stroke="${d.online ? 'var(--teal)' : 'var(--ghost)'}" stroke-width="1.7"
+             style="flex-shrink:0;margin-top:2px">${icon}</svg>
+        <div style="flex-grow:1;min-width:0">
+          <div style="font-size:13px;font-weight:600">${esc(d.name || d.host)}</div>
+          <div class="mono faint" style="font-size:10.5px;margin-top:3px">
+            ${esc(d.model || d.kind)} · ${esc(d.host)}
+          </div>
+        </div>
+        <button class="btn" style="padding:3px 9px;font-size:11px"
+                data-casttarget="${esc(d.host)}">Wyślij plik</button>
+      </div>
+
+      ${d.online ? `
+        <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+          <span class="mono" style="font-size:19px;min-width:44px">${d.volume == null ? '—' : d.volume}</span>
+          <span class="faint" style="font-size:11px">%</span>
+          <div class="grow"></div>
+          <button class="btn" style="padding:4px 9px" data-castvol="-10" data-host="${esc(d.host)}">−10</button>
+          <button class="btn" style="padding:4px 9px" data-castvol="-5" data-host="${esc(d.host)}">−5</button>
+          <button class="btn" style="padding:4px 9px" data-castvol="5" data-host="${esc(d.host)}">+5</button>
+          <button class="btn ${d.muted ? 'danger' : ''}" style="padding:4px 9px"
+                  data-castmute="${esc(d.host)}">${d.muted ? 'wyc.' : 'mute'}</button>
+        </div>
+        <div style="margin-top:10px;padding:8px 10px;background:var(--sunken);
+                    border-radius:3px;font-size:11px;min-height:34px">
+          ${playing ? `
+            <div class="teal" style="font-weight:600">${esc(d.app)}</div>
+            ${d.status_text ? `<div class="dim" style="margin-top:2px">${esc(d.status_text)}</div>` : ''}
+          ` : '<span class="faint">nic nie gra</span>'}
+        </div>
+        ${playing ? `<div style="display:flex;gap:6px;margin-top:9px">
+          <button class="btn" style="flex-grow:1;padding:4px 0" data-castmedia="play" data-host="${esc(d.host)}">▶</button>
+          <button class="btn" style="flex-grow:1;padding:4px 0" data-castmedia="pause" data-host="${esc(d.host)}">❚❚</button>
+          <button class="btn" style="flex-grow:1;padding:4px 0" data-castmedia="stop" data-host="${esc(d.host)}">■</button>
+          <button class="btn" style="flex-grow:1;padding:4px 0;font-size:11px"
+                  data-caststop="${esc(d.host)}">zamknij</button>
+        </div>` : ''}
+      ` : `<div class="red" style="font-size:11px;margin-top:10px">${esc(d.error || 'nie odpowiada')}</div>`}
+    </div>`;
+  };
+
+  const sections = order.filter((k) => groups[k]).map((kind) => `
+    <div>
+      <div style="font-size:10px;letter-spacing:.16em;color:var(--faint);margin-bottom:10px">
+        ${kind.toUpperCase()} &middot; ${groups[kind].length}
+      </div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(310px,1fr))">
+        ${groups[kind].map(card).join('')}
+      </div>
+    </div>`).join('');
+
+  return `
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="faint" style="font-size:11px">${esc(CAST.note || '')} · odczyt na żywo z każdego urządzenia</span>
+    <div class="grow"></div>
+    <button class="btn" data-castscan="1">Szukaj ponownie</button>
   </div>
 
-  <div class="grid" style="grid-template-columns:1fr 1fr">
-    <div class="card">
-      <h3>RZUTNIK</h3>
-      <div class="row">
-        <span class="k">Adres</span><span class="v teal">192.168.0.75</span>
-        <span class="k">Nazwa</span><span class="v">[LG] lodownia</span>
-        <span class="k">Model</span><span class="v">DBF510P-GL</span>
-        <span class="k">System</span><span class="v">webOS</span>
-        <span class="k">MAC</span><span class="v">b0:37:95:2e:4e:05</span>
-        <span class="k">Porty</span><span class="v">3000, 3001, 18181, 36866</span>
-        <span class="k">SSAP</span><span class="v teal">otwarty &mdash; 101 Switching Protocols</span>
-      </div>
-      <div class="faint" style="font-size:11px;margin-top:12px;line-height:1.5">
-        Cztery opisy UPnP na własnych portach, w tym LG WebOSTV DMRplus.
-        Pełny stos webOS.
-      </div>
+  ${CAST_TARGET ? `
+  <div class="card">
+    <h3>WYŚLIJ PLIK NA: ${esc((devices.find((d) => d.host === CAST_TARGET) || {}).name || CAST_TARGET)}</h3>
+    <div style="display:flex;gap:7px">
+      <input type="text" id="castpath" style="flex-grow:1"
+             placeholder="D:\\Muzyka\\album\\01 - utwor.flac">
+      <button class="btn primary" data-castplay="1">Odtwórz</button>
+      <button class="btn" data-casttarget="">Anuluj</button>
     </div>
-
-    <div class="card">
-      <h3>CO DA SSAP</h3>
-      <div style="font-size:12px;line-height:1.7;color:#9aa3ab">
-        Wyłączanie &middot; przełączanie wejść &middot; głośność &middot; uruchamianie aplikacji
-        &middot; powiadomienia na ekranie &middot; wskaźnik.<br><br>
-        <b style="color:var(--amber)">Parowanie:</b> przy pierwszym połączeniu rzutnik
-        wyświetla pytanie na ekranie. Po akceptacji dostajemy klucz klienta i używamy
-        go bezterminowo.<br><br>
-        <b style="color:var(--amber)">Włączanie:</b> SSAP potrafi wyłączyć, ale nie włączyć
-        &mdash; w czuwaniu urządzenie zwija interfejs sieciowy. Do budzenia Wake-on-LAN
-        na powyższy MAC, o ile w menu włączone jest budzenie przez sieć.
-      </div>
+    <div class="faint" style="font-size:11px;margin-top:9px;line-height:1.5">
+      Plik zostaje udostępniony pod tymczasowym adresem z tej aplikacji i przekazany
+      urządzeniu. Nic nie jest przekodowywane. Cast ma szerszy zestaw kodeków niż
+      renderer amplitunera — przyjmuje też Ogg, Opus i wideo.
     </div>
+  </div>` : ''}
 
-    <div class="card">
-      <h3>POZOSTAŁE URZĄDZENIA LG</h3>
-      <div class="row">
-        <span class="k">192.168.0.78</span><span class="v">webOS, model nieustalony</span>
-        <span class="k">192.168.0.70</span><span class="v">„Bedroom LG", Chromecast built-in</span>
-      </div>
-      <div class="faint" style="font-size:11px;margin-top:12px;line-height:1.5">
-        <b style="color:#9aa3ab">Sprostowanie:</b> w pierwszym podejściu wskazałem
-        192.168.0.70 jako rzutnik &mdash; miał MAC z puli LG i otwarty port 9741.
-        Szukałem po producencie zamiast po funkcji. W tej sieci są trzy urządzenia LG
-        i dopiero skan pod kątem portów webOS wskazał właściwe.
-      </div>
-    </div>
+  <div style="display:flex;flex-direction:column;gap:20px">${sections}</div>
 
-    <div class="card">
-      <h3>ŹRÓDŁO OBRAZU</h3>
-      <div class="row">
-        <span class="k">192.168.0.58</span><span class="v teal">Kino Lodownia</span>
-        <span class="k">Platforma</span><span class="v">Google TV (build 3.72)</span>
+  <div class="card">
+    <h3>CO TU DZIAŁA, A CO NIE</h3>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:20px">
+      <div class="faint" style="font-size:11px;line-height:1.6">
+        <b style="color:var(--teal)">Działa bez żadnych poświadczeń:</b><br>
+        odczyt stanu i głośności, regulacja i wyciszenie, podgląd tego co gra,
+        sterowanie odtwarzaniem, zamykanie aplikacji, wysyłanie własnych plików.<br><br>
+        Uwierzytelnianie Cast (<span class="mono">tp.deviceauth</span>) służy do tego,
+        żeby nadawca mógł zweryfikować odbiornik — nie odwrotnie. Dlatego sterowanie
+        nie wymaga parowania, inaczej niż przy rzutniku.
       </div>
-      <div class="faint" style="font-size:11px;margin-top:12px;line-height:1.5">
-        To urządzenie podaje obraz do rzutnika. Też ma otwarty port 8008 bez
-        uwierzytelnienia i protokół Cast na 8009 &mdash; da się nim sterować
-        tą samą drogą co głośnikami Cast w domu.
-      </div>
-      <div style="display:flex;gap:7px;margin-top:14px">
-        <button class="btn" data-act="scan">Szukaj urządzeń w sieci</button>
+      <div class="faint" style="font-size:11px;line-height:1.6">
+        <b style="color:var(--amber)">Nie działa:</b><br>
+        przejmowanie cudzej sesji Spotify czy YouTube — te aplikacje trzymają
+        sterowanie po stronie chmury, a Cast pokazuje tylko ich status.
+        Można je zamknąć, ale nie przewijać.<br><br>
+        Grup Cast aplikacja nie utworzy — grupy zakłada się w Google Home.
+        Istniejące grupy widać i da się nimi sterować jak pojedynczym urządzeniem.
       </div>
     </div>
   </div>`;
@@ -1343,6 +1710,82 @@ function bind() {
     b.onclick = () => cmd('subwoofer', b.dataset.swr === '1'));
   view.querySelectorAll('[data-osd]').forEach((b) =>
     b.onclick = () => cmd('osd', b.dataset.osd));
+  // --- inne urządzenia Cast
+  view.querySelectorAll('[data-castscan]').forEach((b) =>
+    b.onclick = () => api('/api/cast', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'scan' })
+    }).then(() => { toast('Szukam urządzeń…', true); setTimeout(loadCast, 4000); })
+      .catch((e) => toast(e.message, false)));
+  view.querySelectorAll('[data-castvol]').forEach((b) =>
+    b.onclick = () => castAct(b.dataset.host, 'volume_step', parseInt(b.dataset.castvol, 10)));
+  view.querySelectorAll('[data-castmute]').forEach((b) => {
+    const dev = (CAST.devices || []).find((d) => d.host === b.dataset.castmute);
+    b.onclick = () => castAct(b.dataset.castmute, 'mute', !(dev && dev.muted));
+  });
+  view.querySelectorAll('[data-castmedia]').forEach((b) =>
+    b.onclick = () => castAct(b.dataset.host, b.dataset.castmedia));
+  view.querySelectorAll('[data-caststop]').forEach((b) =>
+    b.onclick = () => castAct(b.dataset.caststop, 'stop_app'));
+  view.querySelectorAll('[data-casttarget]').forEach((b) =>
+    b.onclick = () => { CAST_TARGET = b.dataset.casttarget || null; lastSignature = ''; render(); });
+  view.querySelectorAll('[data-castplay]').forEach((b) =>
+    b.onclick = () => {
+      const path = $('#castpath').value.trim();
+      if (!path) { toast('Podaj ścieżkę do pliku', false); return; }
+      api('/api/cast', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'play_file', host: CAST_TARGET, path: path })
+      }).then((r) => { toast('Wysłano: ' + r.title, true); setTimeout(loadCast, 1200); })
+        .catch((e) => toast(e.message, false));
+    });
+
+  // --- rzutnik
+  view.querySelectorAll('[data-key]').forEach((b) =>
+    b.onclick = () => projAct('press', b.dataset.key));
+  view.querySelectorAll('[data-keepawake]').forEach((b) =>
+    b.onclick = () => api('/api/projector', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'keep_awake', value: b.dataset.keepawake === '1' })
+    }).then((r) => { toast(r.on ? 'Blokada włączona — co ' + r.minutes + ' min' : 'Blokada wyłączona', true);
+                     loadProjector(true); })
+      .catch((e) => toast(e.message, false)));
+  view.querySelectorAll('[data-keepmin]').forEach((b) =>
+    b.onclick = () => api('/api/projector', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'keep_awake', value: true,
+                             minutes: parseInt(b.dataset.keepmin, 10) })
+    }).then((r) => { toast('Sygnał co ' + r.minutes + ' min', true); loadProjector(true); })
+      .catch((e) => toast(e.message, false)));
+
+  view.querySelectorAll('[data-projact]').forEach((b) =>
+    b.onclick = () => {
+      const a = b.dataset.projact;
+      if (a === 'toast') projAct('toast', 'AVREE Tuner — połączono');
+      else if (a === 'power_off') projAct('power_off').then(() => toast('Wyłączam rzutnik', true));
+      else if (a === 'wake') projAct('wake').then(() => toast('Wysłano magiczny pakiet', true));
+      else projAct(a);
+    });
+  view.querySelectorAll('[data-projinput]').forEach((b) =>
+    b.onclick = () => projAct('input', b.dataset.projinput));
+  view.querySelectorAll('[data-projapp]').forEach((b) =>
+    b.onclick = () => projAct('launch', b.dataset.projapp));
+  view.querySelectorAll('[data-projvol]').forEach((b) =>
+    b.onclick = () => projAct('volume_step', parseInt(b.dataset.projvol, 10)));
+  view.querySelectorAll('[data-projmute]').forEach((b) =>
+    b.onclick = () => projAct('mute', !(PROJ && PROJ.muted)));
+  view.querySelectorAll('[data-projrefresh]').forEach((b) =>
+    b.onclick = () => loadProjector(true));
+  view.querySelectorAll('[data-projscan]').forEach((b) =>
+    b.onclick = () => projScan());
+  view.querySelectorAll('[data-projuse]').forEach((b) =>
+    b.onclick = () => api('/api/projector', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'use', host: b.dataset.projuse,
+                             name: b.dataset.name, model: b.dataset.model })
+    }).then(() => { toast('Wybrano ' + b.dataset.projuse, true); loadProjector(true); })
+      .catch((e) => toast(e.message, false)));
+
   // --- equalizer
   view.querySelectorAll('[data-eqch]').forEach((b) =>
     b.onclick = () => { EQ_CHANNEL = b.dataset.eqch; lastSignature = ''; render(); });
@@ -1465,6 +1908,25 @@ async function startScan() {
     }
   }, 700);
 }
+
+
+/* Klawiatura jako pilot — tylko przy otwartej zakładce rzutnika i tylko gdy
+   fokus nie siedzi w polu tekstowym. */
+const KEYMAP = {
+  ArrowUp: 'UP', ArrowDown: 'DOWN', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT',
+  Enter: 'ENTER', Backspace: 'BACK', Escape: 'EXIT', Home: 'HOME',
+  ' ': 'PLAY', m: 'MUTE', i: 'INFO',
+};
+
+document.addEventListener('keydown', (e) => {
+  if (TAB !== 'projektor') return;
+  const el = document.activeElement;
+  if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT')) return;
+  const button = KEYMAP[e.key];
+  if (!button) return;
+  e.preventDefault();
+  projAct('press', button);
+});
 
 /* ---------- start ---------- */
 

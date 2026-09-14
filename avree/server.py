@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from . import discovery, eq, upnp
+from . import cast, discovery, eq, projector as projector_mod, upnp, webos
 from .avr import (
     CROSSOVER_FREQS,
     MODE_CATEGORIES,
@@ -67,6 +67,9 @@ class App:
         # bo skan podsieci potrafi trwać kilkanaście sekund.
         self.scan: dict[str, Any] = {"running": False, "found": [], "note": ""}
         self.eq = eq.load()
+        self.projector = projector_mod.Projector()
+        self.projector_scan = {"running": False, "found": [], "note": ""}
+        self.cast = cast.CastHub()
 
     def ensure_renderer(self) -> upnp.Renderer | None:
         if self.renderer is None and self.renderer_error is None:
@@ -144,6 +147,12 @@ class Handler(BaseHTTPRequestHandler):
             self._json(self.app.scan)
         elif route == "/api/eq":
             self._json(self._eq_payload())
+        elif route == "/api/projector":
+            self._json(self._projector_payload())
+        elif route == "/api/projector/scan":
+            self._json(self.app.projector_scan)
+        elif route == "/api/cast":
+            self._json(self._cast_payload())
         elif route.startswith("/media/"):
             self._serve_media(route[len("/media/"):])
         else:
@@ -238,6 +247,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(self._connect(body))
             elif route == "/api/eq":
                 self._json(self._eq_save(body))
+            elif route == "/api/projector":
+                self._json(self._projector_action(body))
+            elif route == "/api/projector/scan":
+                self._json(self._projector_scan())
+            elif route == "/api/cast":
+                self._json(self._cast_action(body))
             else:
                 self.send_error(404)
         except (DenonTelnetError, upnp.UpnpError, ValueError) as e:
@@ -361,6 +376,113 @@ class Handler(BaseHTTPRequestHandler):
             "size": path.stat().st_size, "url": url,
         }
         return {"ok": True, "now_playing": self.app.now_playing}
+
+    # ---- urządzenia Google Cast ----------------------------------------
+
+    def _cast_payload(self) -> dict[str, Any]:
+        hub = self.app.cast
+        return {
+            "devices": hub.overview(),
+            "note": hub.scan_note,
+            "scanning": hub.scanning,
+        }
+
+    def _cast_action(self, body: dict[str, Any]) -> dict[str, Any]:
+        hub = self.app.cast
+        action = str(body.get("action") or "")
+
+        if action == "scan":
+            if hub.scanning:
+                return {"ok": True, "already": True}
+            threading.Thread(target=hub.scan, daemon=True).start()
+            return {"ok": True}
+
+        host = str(body.get("host") or "")
+        if not host:
+            raise ValueError("nie wskazano urządzenia")
+
+        try:
+            if action == "play_file":
+                return self._cast_play_file(host, body)
+            return hub.act(host, action, body.get("value"))
+        except cast.CastError as e:
+            raise ValueError(str(e)) from e
+
+    def _cast_play_file(self, host: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Udostępnia lokalny plik i podaje urządzeniu jego adres.
+
+        Ta sama droga co przy amplitunerze: plik serwujemy z aplikacji pod
+        jednorazowym adresem, więc nic nie jest przekodowywane ani kopiowane.
+        """
+        raw = (body.get("path") or "").strip().strip('"')
+        if not raw:
+            raise ValueError("podaj ścieżkę do pliku")
+        path = Path(os.path.expandvars(raw)).expanduser()
+        ext = path.suffix.lower()
+        # Cast ma własny zestaw kodeków, szerszy niż renderer amplitunera.
+        types = dict(upnp.MIME_BY_EXT)
+        types.update({".ogg": "audio/ogg", ".opus": "audio/ogg",
+                      ".mp4": "video/mp4", ".mkv": "video/mp4",
+                      ".webm": "video/webm"})
+        mime = types.get(ext)
+        if mime is None:
+            raise ValueError(f"nieobsługiwane rozszerzenie {ext}")
+        if not path.is_file():
+            raise ValueError(f"nie ma takiego pliku: {path}")
+
+        token = self.app.media.publish(path)
+        url = f"http://{upnp.local_ip_towards(host)}:{self.app.port}/media/{token}"
+        self.app.cast.act(host, "play_url", {
+            "url": url, "title": path.stem, "content_type": mime})
+        return {"ok": True, "url": url, "title": path.stem}
+
+    # ---- rzutnik LG webOS ----------------------------------------------
+
+    def _projector_payload(self) -> dict[str, Any]:
+        state = self.app.projector.status()
+        state["scan"] = self.app.projector_scan
+        state["paired"] = bool(webos.load_keys().get(state.get("host") or ""))
+        return state
+
+    def _projector_action(self, body: dict[str, Any]) -> dict[str, Any]:
+        action = body.get("action")
+        proj = self.app.projector
+        if action == "use":
+            result = proj.use(str(body.get("host") or ""),
+                              str(body.get("name") or ""),
+                              str(body.get("model") or ""))
+            proj.learn_mac()
+            return result
+        if action == "forget":
+            proj.disconnect()
+            return {"ok": True}
+        if action == "keep_awake":
+            return proj.set_keep_awake(bool(body.get("value")),
+                                       body.get("minutes"))
+        try:
+            return proj.act(str(action), body.get("value"))
+        except webos.WebOsError as e:
+            raise ValueError(str(e)) from e
+
+    def _projector_scan(self) -> dict[str, Any]:
+        if self.app.projector_scan.get("running"):
+            return {"ok": True, "already": True}
+        self.app.projector_scan = {"running": True, "found": [], "note": "szukam…"}
+
+        def work() -> None:
+            try:
+                found = projector_mod.Projector.scan()
+                self.app.projector_scan = {
+                    "running": False, "found": found,
+                    "note": (f"znaleziono {len(found)}" if found
+                             else "brak urządzeń webOS w tej sieci"),
+                }
+            except Exception as e:                       # noqa: BLE001
+                self.app.projector_scan = {"running": False, "found": [],
+                                           "note": f"błąd: {e}"}
+
+        threading.Thread(target=work, daemon=True).start()
+        return {"ok": True}
 
     # ---- equalizer parametryczny ---------------------------------------
 
