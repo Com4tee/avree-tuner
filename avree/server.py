@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from . import (androidtv, cast, discovery, eq,
-               projector as projector_mod, upnp, webos)
+               projector as projector_mod, session as session_mod, upnp, webos)
 from .avr import (
     CROSSOVER_FREQS,
     OSD_KEYS,
@@ -31,6 +31,7 @@ from .avr import (
     TIPS,
     Avr,
 )
+from . import audio
 from .telnet import DenonTelnetError
 
 WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
@@ -78,6 +79,10 @@ class App:
         # przy następnym klawiszu.
         self.atv: dict[str, androidtv.AndroidTv] = {}
         self.atv_pairing: dict[str, Any] = {}
+        # Sesja pomiarowa żyje tak długo jak aplikacja — pomiary
+        # z kolejnych pozycji mikrofonu muszą się kumulować.
+        self.measure = session_mod.MeasureSession()
+        self.channel_scan: Any = None
         self.projector_scan = {"running": False, "found": [], "note": ""}
         self.cast = cast.CastHub()
 
@@ -163,6 +168,21 @@ class Handler(BaseHTTPRequestHandler):
             self._json(self.app.projector_scan)
         elif route == "/api/cast":
             self._json(self._cast_payload())
+        elif route == "/api/measure":
+            self._json(self._measure_payload())
+        elif route == "/api/measure/channels":
+            self._json({"result": self.app.channel_scan})
+        elif route == "/api/measure/level":
+            self._json(self.app.measure.monitor_read())
+        elif route == "/api/measure/curve":
+            q = urllib.parse.parse_qs(parsed.query)
+            channel = q.get("channel", [""])[0]
+            if q.get("position"):
+                self._json(self.app.measure.curve(channel,
+                                                  int(q["position"][0])) or {})
+            else:
+                self._json(self.app.measure.combined(
+                    channel, q.get("mode", ["auto"])[0]) or {})
         elif route == "/api/androidtv":
             self._json(self._atv_payload())
         elif route == "/api/webos":
@@ -277,6 +297,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(self._webos_action(body))
             elif route == "/api/androidtv":
                 self._json(self._atv_action(body))
+            elif route == "/api/measure":
+                self._json(self._measure_action(body))
             else:
                 self.send_error(404)
         except (DenonTelnetError, upnp.UpnpError, ValueError) as e:
@@ -406,6 +428,79 @@ class Handler(BaseHTTPRequestHandler):
             "size": path.stat().st_size, "url": url,
         }
         return {"ok": True, "now_playing": self.app.now_playing}
+
+    # ---- pomiar --------------------------------------------------------
+
+    def _measure_payload(self) -> dict[str, Any]:
+        out = self.app.measure.overview()
+        try:
+            out["devices"] = audio.devices()
+        except audio.AudioError as e:
+            out["devices"] = {"error": str(e), "inputs": [], "outputs": [],
+                              "apis": [], "multichannel": [], "has_asio": False}
+        return out
+
+    def _measure_action(self, body: dict[str, Any]) -> dict[str, Any]:
+        sess = self.app.measure
+        action = str(body.get("action") or "")
+
+        try:
+            if action == "setup":
+                for key, value in (body.get("setup") or {}).items():
+                    if hasattr(sess.setup, key):
+                        setattr(sess.setup, key, value)
+                for key in ("f_start", "f_stop", "duration"):
+                    if key in body:
+                        setattr(sess, key, float(body[key]))
+                if body.get("channel_map"):
+                    sess.channel_map = {k: int(v) for k, v
+                                        in body["channel_map"].items()}
+                return {"ok": True, "setup": sess.setup.to_dict()}
+
+            if action == "check":
+                return audio.check(sess.setup.input_device, sess.setup.output_device,
+                                   sess.setup.samplerate, sess.setup.output_channels,
+                                   sess.setup.input_channels)
+            if action == "monitor_start":
+                return sess.monitor_start()
+            if action == "monitor_stop":
+                return sess.monitor_stop()
+            if action == "reset_clip":
+                if sess._monitor:
+                    sess._monitor.reset_clip()
+                return {"ok": True}
+            if action == "clear":
+                return sess.clear(body.get("channel"))
+
+            if action == "run":
+                # Pomiar trwa kilka sekund i blokuje kartę dźwiękową,
+                # więc idzie w tle, a interfejs dopytuje o stan.
+                channel = str(body.get("channel") or "")
+                position = int(body.get("position") or 1)
+
+                def work() -> None:
+                    try:
+                        sess.run_one(channel, position)
+                    except Exception as e:           # noqa: BLE001
+                        sess.state.error = str(e)
+
+                threading.Thread(target=work, daemon=True).start()
+                return {"ok": True, "started": True}
+
+            if action == "identify":
+                def identify() -> None:
+                    try:
+                        self.app.channel_scan = sess.identify_channels()
+                    except Exception as e:           # noqa: BLE001
+                        self.app.channel_scan = [{"error": str(e)}]
+
+                self.app.channel_scan = None
+                threading.Thread(target=identify, daemon=True).start()
+                return {"ok": True, "started": True}
+
+            raise ValueError(f"nieznana akcja: {action}")
+        except audio.AudioError as e:
+            raise ValueError(str(e)) from e
 
     # ---- Android TV / Google TV ----------------------------------------
 

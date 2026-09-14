@@ -64,10 +64,10 @@ python tools/mapper.py <ip>          # mapowanie nieudokumentowanych komend
 | 0 | Diagnostyka: zrzut stanu + pomiar różnicowy Audyssey ON/OFF |
 | 1 | Sterownik i GUI — pełna kontrola nad AVR ✔ |
 | 2 | Odtwarzanie plików przez DLNA ✔ · pętla WASAPI dla przeglądarki |
-| 3 | Parser `.ady` — odczyt i wizualizacja kalibracji |
-| 4 | Pipeline pomiarowy przez API Room EQ Wizard |
+| 3 | Silnik pomiarowy — sweep, dekonwolucja, analiza ✔ |
+| 4 | Wejście audio i wizualizacja z mikrofonu ✔ |
 | 5 | Własny optymalizator filtrów |
-| 6 | Upload kalibracji do amplitunera |
+| 6 | Parser `.ady` i upload kalibracji do amplitunera |
 
 ## Ograniczenia ustalone empirycznie
 

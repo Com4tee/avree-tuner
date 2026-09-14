@@ -983,154 +983,275 @@ function viewEqualizer() {
 
 /* ================= MODUŁ POMIAROWY ================= */
 
-function viewPomiar() {
-  return `
-  <div class="banner">
-    <div class="grow">
-      <div class="t">Szkielet modułu — silnik pomiarowy powstaje w następnej kolejności</div>
-      <div class="d">Okna i funkcje są rozstawione, parametry zapisują się. Brakuje samego
-      przetwarzania sygnału: generatora sweepu, dekonwolucji i uśredniania. To dokładka
-      <span class="mono">numpy</span>, <span class="mono">scipy</span> i
-      <span class="mono">sounddevice</span> — jedyne zależności zewnętrzne w całym projekcie.</div>
-    </div>
-  </div>
+let MEAS = null;
+let LEVEL = null;
+let CURVES = {};            // kanał -> { positions: {...}, combined: {...} }
+let MEAS_CHANNEL = 'FL';
+let levelTimer = null;
 
-  <div class="grid" style="grid-template-columns:340px 1fr">
+async function loadMeasure() {
+  try {
+    MEAS = await api('/api/measure');
+    if (TAB === 'pomiar') { lastSignature = ''; render(); }
+  } catch (e) { MEAS = { error: e.message }; }
+}
+
+function measAct(action, extra) {
+  return api('/api/measure', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ action: action }, extra || {}))
+  }).catch((e) => { toast(e.message, false); throw e; });
+}
+
+async function loadCurves(channel) {
+  const entry = { positions: {}, combined: null };
+  const info = ((MEAS && MEAS.channels) || []).find((c) => c.code === channel);
+  for (const pos of (info ? info.positions : [])) {
+    try {
+      entry.positions[pos] = await api(
+        `/api/measure/curve?channel=${encodeURIComponent(channel)}&position=${pos}`);
+    } catch (e) { /* pomijamy */ }
+  }
+  if (Object.keys(entry.positions).length) {
+    try {
+      entry.combined = await api(`/api/measure/curve?channel=${encodeURIComponent(channel)}`);
+    } catch (e) { /* pomijamy */ }
+  }
+  CURVES[channel] = entry;
+  lastSignature = '';
+  render();
+}
+
+/* --- wykres odpowiedzi: oś X logarytmiczna, Y w decybelach --- */
+const MW = 980, MH = 420, ML = 52, MB = 28, MT = 12;
+const mx = (f) => ML + (Math.log10(f / 15) / Math.log10(22000 / 15)) * (MW - ML - 12);
+
+function measureChart(channel) {
+  const entry = CURVES[channel];
+  const sets = entry ? Object.values(entry.positions) : [];
+  if (!sets.length) {
+    return `<div style="height:${MH}px;display:flex;align-items:center;justify-content:center;
+                        color:var(--ghost);font-size:12px;text-align:center;line-height:1.7">
+      brak pomiarów dla tego kanału<br>ustaw mikrofon i naciśnij „Zmierz”</div>`;
+  }
+
+  // Zakres pionowy dobieramy do danych, z zaokrągleniem do 5 dB.
+  let lo = Infinity, hi = -Infinity;
+  sets.forEach((s) => s.smoothed.forEach((v) => { if (v < lo) lo = v; if (v > hi) hi = v; }));
+  const pad = 6;
+  lo = Math.floor((lo - pad) / 5) * 5;
+  hi = Math.ceil((hi + pad) / 5) * 5;
+  const my = (db) => MT + ((hi - db) / (hi - lo)) * (MH - MT - MB);
+
+  const grid = [];
+  [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000].forEach((f) => {
+    const x = mx(f);
+    grid.push(`<line x1="${x}" y1="${MT}" x2="${x}" y2="${MH - MB}" stroke="#1f2429"/>`);
+    grid.push(`<text x="${x}" y="${MH - 9}" text-anchor="middle" fill="#5c656d"
+      font-size="10" font-family="IBM Plex Mono, monospace">${f >= 1000 ? (f / 1000) + 'k' : f}</text>`);
+  });
+  for (let db = lo; db <= hi; db += 5) {
+    const y = my(db);
+    grid.push(`<line x1="${ML}" y1="${y}" x2="${MW - 12}" y2="${y}" stroke="#1f2429"/>`);
+    grid.push(`<text x="${ML - 8}" y="${y + 4}" text-anchor="end" fill="#5c656d"
+      font-size="10" font-family="IBM Plex Mono, monospace">${db}</text>`);
+  }
+
+  const path = (freqs, values) => freqs.map((f, i) =>
+    (i ? 'L' : 'M') + mx(f).toFixed(1) + ' ' + my(values[i]).toFixed(1)).join(' ');
+
+  // Pojedyncze pozycje cienko i blado — pokazują rozrzut między punktami.
+  const thin = sets.map((s) =>
+    `<path d="${path(s.freqs, s.smoothed)}" fill="none" stroke="#3c454d"
+            stroke-width="1" opacity=".55"/>`).join('');
+
+  const combined = entry.combined
+    ? `<path d="${path(entry.combined.freqs, entry.combined.smoothed)}"
+             fill="none" stroke="#3fc0c4" stroke-width="2.6" stroke-linejoin="round"/>`
+    : '';
+
+  return `<svg viewBox="0 0 ${MW} ${MH}" style="width:100%;height:100%">
+    ${grid.join('')}${thin}${combined}
+  </svg>`;
+}
+
+function levelMeter() {
+  if (!LEVEL || !LEVEL.running) {
+    return `<button class="btn primary" data-meas="monitor_start">Włącz podgląd poziomu</button>
+      <span class="faint" style="font-size:11px;margin-left:10px">
+        ustaw wzmocnienie zanim zmierzysz</span>`;
+  }
+  const bars = (LEVEL.peak_db || []).map((db, i) => {
+    const pct = Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+    const clip = (LEVEL.clipped || [])[i];
+    const color = clip ? 'var(--red)' : (db > -6 ? 'var(--amber)' : 'var(--teal)');
+    return `
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+      <span class="mono faint" style="font-size:10px;width:52px">wej. ${i + 1}</span>
+      <div class="vol-bar" style="flex-grow:1;height:12px">
+        <i style="width:${pct}%;background:${color}"></i>
+      </div>
+      <span class="mono" style="font-size:11px;width:56px;text-align:right;
+            color:${clip ? 'var(--red)' : 'inherit'}">${db.toFixed(1)}</span>
+    </div>`;
+  }).join('');
+  return bars + `
+    <div style="display:flex;gap:6px;margin-top:9px">
+      <button class="btn" data-meas="monitor_stop">Zatrzymaj</button>
+      <button class="btn" data-meas="reset_clip">Skasuj obcięcie</button>
+    </div>
+    <div class="faint" style="font-size:11px;margin-top:9px;line-height:1.45">
+      Celuj w szczyty około −12 dB. Powyżej −1 dB wchodzi obcięcie, którego
+      w widmie nie widać wprost, a psuje wynik.
+    </div>`;
+}
+
+function viewPomiar() {
+  if (!MEAS) { setTimeout(loadMeasure, 0);
+    return '<div class="card"><h3>POMIAR</h3><div class="dim">wczytuję…</div></div>'; }
+
+  const dev = MEAS.devices || {};
+  const st = MEAS.state || {};
+  const setup = MEAS.setup || {};
+  const channels = MEAS.channels || [];
+  const info = channels.find((c) => c.code === MEAS_CHANNEL) || channels[0] || {};
+  const positions = info.positions || [];
+
+  const option = (list, current, attr) => list.map((d) =>
+    `<option value="${d.index}" ${d.index === current ? 'selected' : ''}>
+       [${d.index}] ${esc(d.name.slice(0, 40))} · ${esc(d.api)} · ${attr === 'in' ? d.inputs : d.outputs} kan.
+     </option>`).join('');
+
+  return `
+  ${dev.error ? `<div class="banner bad"><div class="grow">
+      <div class="t">Brak dostępu do karty dźwiękowej</div>
+      <div class="d">${esc(dev.error)}</div></div></div>` : ''}
+
+  ${!dev.multichannel || !dev.multichannel.length ? `
+  <div class="banner"><div class="grow">
+    <div class="t">Żadne wyjście nie zgłasza więcej niż dwóch kanałów</div>
+    <div class="d">Zmierzysz przednie lewy i prawy oraz subwoofery przez wyjście stereo.
+    Centralny i surroundy wymagają wyjścia wielokanałowego — HDMI ustawionego
+    w Windows na 5.1, z wyłączonym dźwiękiem przestrzennym.</div>
+  </div></div>` : ''}
+
+  <div class="grid" style="grid-template-columns:360px 1fr">
     <div style="display:flex;flex-direction:column;gap:14px">
 
       <div class="card">
         <h3>TOR POMIAROWY</h3>
-        <div class="setup-row">
-          <div style="font-size:12px">Mikrofon</div>
-          <div class="seg"><button class="on">ECM8000</button><button>Denon</button></div>
-          <div></div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div>
+            <div class="faint" style="font-size:11px;margin-bottom:4px">Wejście (mikrofon)</div>
+            <select class="mini" id="meas-in">${option(dev.inputs || [], setup.input_device, 'in')}</select>
+          </div>
+          <div>
+            <div class="faint" style="font-size:11px;margin-bottom:4px">Wyjście (do amplitunera)</div>
+            <select class="mini" id="meas-out">${option(dev.outputs || [], setup.output_device, 'out')}</select>
+          </div>
+          <div style="display:flex;gap:8px">
+            <div style="flex-grow:1">
+              <div class="faint" style="font-size:11px;margin-bottom:4px">Kanał mikrofonu</div>
+              <input type="number" class="mini" id="meas-mic" min="0" max="7" value="${setup.mic_channel ?? 0}">
+            </div>
+            <div style="flex-grow:1">
+              <div class="faint" style="font-size:11px;margin-bottom:4px">Pętla odniesienia</div>
+              <input type="number" class="mini" id="meas-ref" min="-1" max="7"
+                     value="${setup.reference_channel == null ? -1 : setup.reference_channel}">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <div style="flex-grow:1">
+              <div class="faint" style="font-size:11px;margin-bottom:4px">Kanałów wyjścia</div>
+              <input type="number" class="mini" id="meas-outch" min="2" max="8" value="${setup.output_channels ?? 2}">
+            </div>
+            <div style="flex-grow:1">
+              <div class="faint" style="font-size:11px;margin-bottom:4px">Kanałów wejścia</div>
+              <input type="number" class="mini" id="meas-inch" min="1" max="8" value="${setup.input_channels ?? 2}">
+            </div>
+          </div>
+          <div style="display:flex;gap:7px;margin-top:3px">
+            <button class="btn primary" style="flex-grow:1" data-meas="setup">Zapisz tor</button>
+            <button class="btn" data-meas="check">Sprawdź</button>
+          </div>
         </div>
-        <div class="setup-row">
-          <div style="font-size:12px">Interfejs</div>
-          <div class="mono dim" style="font-size:11px">ESI U24 XL &middot; ASIO</div>
-          <div></div>
-        </div>
-        <div class="setup-row">
-          <div style="font-size:12px">Phantom</div>
-          <div class="mono dim" style="font-size:11px">z miksera, kanał L</div>
-          <div></div>
-        </div>
-        <div class="setup-row">
-          <div style="font-size:12px">Pętla odniesienia</div>
-          <div class="mono amber" style="font-size:11px">wyjście analog &rarr; wejście R</div>
-          <div></div>
-        </div>
-        <div class="setup-row">
-          <div style="font-size:12px">Wyjście do AVR</div>
-          <div class="seg"><button class="on">TOSLINK</button><button>HDMI</button><button>DLNA</button></div>
-          <div></div>
-        </div>
-        <div class="faint" style="font-size:11px;margin-top:11px;line-height:1.5">
-          TOSLINK jest izolowany optycznie, więc pętla masy nie ma jak powstać — ale jest stereo.
-          Tą drogą zmierzymy przednie L/R i oba subwoofery. Centralny i surroundy wymagają
-          HDMI podłączonego na czas pomiaru.
+        <div class="faint" style="font-size:11px;margin-top:11px;line-height:1.45">
+          Pętla odniesienia to wyjście wpięte z powrotem we własne wejście —
+          daje bezwzględne opóźnienie toru i odległości w metrach.
+          Wpisz −1, jeśli jej nie masz; odległości będą wtedy względne,
+          co do wyrównania kanałów wystarcza.
+          ${MEAS.loopback_ms ? `<br><br>Zmierzone opóźnienie toru:
+            <span class="mono teal">${MEAS.loopback_ms} ms</span>` : ''}
         </div>
       </div>
 
       <div class="card">
+        <h3>POZIOM Z MIKROFONU</h3>
+        <div id="levelbox">${levelMeter()}</div>
+      </div>
+
+      <div class="card">
         <h3>SWEEP</h3>
-        <div class="setup-row">
-          <div style="font-size:12px">Zakres</div>
-          <div class="mono" style="font-size:12px">10 Hz &ndash; 24 kHz</div><div></div>
+        <div class="row">
+          <span class="k">Zakres</span>
+          <span class="v">${MEAS.sweep.f_start} – ${MEAS.sweep.f_stop} Hz</span>
+          <span class="k">Długość</span><span class="v">${MEAS.sweep.duration} s</span>
         </div>
-        <div class="setup-row">
-          <div style="font-size:12px">Długość</div>
-          <div class="seg"><button>256k</button><button class="on">512k</button><button>1M</button></div>
-          <div></div>
+        <div class="seg" style="margin-top:10px">
+          ${[3, 6, 10, 15].map((d) =>
+            `<button class="${MEAS.sweep.duration === d ? 'on' : ''}" data-dur="${d}">${d} s</button>`).join('')}
         </div>
-        <div class="setup-row">
-          <div style="font-size:12px">Poziom</div>
-          <div class="mono" style="font-size:12px">&minus;12 dBFS</div><div></div>
-        </div>
-        <div class="setup-row">
-          <div style="font-size:12px">Powtórzenia</div>
-          <div class="seg"><button>1</button><button class="on">2</button><button>4</button></div>
-          <div></div>
-        </div>
-        <div class="faint" style="font-size:11px;margin-top:11px;line-height:1.5">
-          Sweep logarytmiczny metodą Fariny: filtr odwrotny to ten sam przebieg odwrócony
-          w czasie z korekcją &minus;6 dB na oktawę. Splot przez FFT daje odpowiedź impulsową,
-          a zniekształcenia harmoniczne lądują przed nią i dają się odciąć oknem.
+        <div class="faint" style="font-size:11px;margin-top:10px;line-height:1.45">
+          Dłuższy sweep to lepszy odstęp od szumu, zwłaszcza w dole pasma.
+          Krótszy wystarcza do szybkiego sprawdzenia ustawienia mikrofonu.
         </div>
       </div>
     </div>
 
     <div style="display:flex;flex-direction:column;gap:14px">
-
       <div class="card" style="flex-grow:1;display:flex;flex-direction:column">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-          <div style="font-size:13px;font-weight:600">Pomiar</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div class="seg">
+            ${channels.map((c) => `<button class="${c.code === MEAS_CHANNEL ? 'on' : ''}"
+                data-measch="${esc(c.code)}">${esc(c.code)}
+              ${c.positions.length ? `<span style="opacity:.6">·${c.positions.length}</span>` : ''}
+            </button>`).join('')}
+          </div>
           <div class="grow"></div>
-          <span class="faint" style="font-size:11px">brak danych — nic jeszcze nie zmierzono</span>
-        </div>
-        <div style="flex-grow:1;min-height:300px;background:var(--sunken);border:1px solid var(--line-dim);
-                    border-radius:3px;display:flex;align-items:center;justify-content:center">
-          <div style="text-align:center;color:var(--ghost);font-size:12px;line-height:1.7">
-            tu wyląduje odpowiedź częstotliwościowa i impulsowa<br>
-            zmierzona, cel, po korekcji
+          <span class="faint" style="font-size:11px">
+            ${positions.length ? `${positions.length} poz. · ` : ''}
+            ${(CURVES[MEAS_CHANNEL] && CURVES[MEAS_CHANNEL].combined
+               && CURVES[MEAS_CHANNEL].combined.distance_m != null)
+              ? 'odległość ' + CURVES[MEAS_CHANNEL].combined.distance_m + ' m' : ''}
+          </span>
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="width:14px;height:2px;background:#3c454d;display:inline-block"></span>
+            <span class="faint" style="font-size:11px">pozycje</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="width:14px;height:3px;background:var(--teal);display:inline-block"></span>
+            <span class="faint" style="font-size:11px">uśrednione</span>
           </div>
         </div>
-        <div style="display:flex;gap:7px;margin-top:12px">
-          <button class="btn" disabled style="opacity:.45;cursor:default">Zmierz kanał</button>
-          <button class="btn" disabled style="opacity:.45;cursor:default">Zmierz wszystkie</button>
-          <button class="btn" disabled style="opacity:.45;cursor:default">Oblicz filtry</button>
-          <div class="grow"></div>
-          <button class="btn" disabled style="opacity:.45;cursor:default">Eksport .ady</button>
-        </div>
-      </div>
 
-      <div class="card">
-        <h3>ANALIZA I OGRANICZENIA OPTYMALIZATORA</h3>
-        <div class="grid" style="grid-template-columns:1fr 1fr;gap:14px">
-          <div>
-            <div class="setup-row">
-              <div style="font-size:12px">Górna granica korekcji</div>
-              <div class="seg"><button>300</button><button>1k</button><button class="on">5k</button><button>20k</button></div>
-              <div></div>
-            </div>
-            <div class="setup-row">
-              <div style="font-size:12px">Wygładzanie</div>
-              <div class="seg"><button>1/24</button><button class="on">zmienne</button><button>1/3</button></div>
-              <div></div>
-            </div>
-            <div class="setup-row">
-              <div style="font-size:12px">Uśrednianie pozycji</div>
-              <div class="seg"><button class="on">auto</button><button>wektorowe</button><button>mocy</button></div>
-              <div></div>
-            </div>
-            <div class="setup-row">
-              <div style="font-size:12px">Maks. podbicie</div>
-              <div class="seg"><button class="on">0 dB</button><button>+3</button><button>+6</button></div>
-              <div></div>
-            </div>
-            <div class="setup-row">
-              <div style="font-size:12px">Maks. Q</div>
-              <div class="seg"><button>4</button><button class="on">8</button><button>16</button></div>
-              <div></div>
-            </div>
-          </div>
-          <div class="faint" style="font-size:11.5px;line-height:1.65">
-            <b style="color:#e8a33d">Dlaczego nie korygujemy wszystkiego do 20 kHz</b><br><br>
-            Poniżej częstotliwości przejścia pomieszczenie zachowuje się modalnie: odpowiedź jest
-            podobna w całej strefie odsłuchu i powtarzalna, więc korekcja ma sens.<br><br>
-            Wyżej dominuje filtrowanie grzebieniowe od odbić. Przesuń mikrofon o kilka centymetrów,
-            a wszystkie szczyty i doliny wylądują gdzie indziej. Korygowanie tego z jednego punktu
-            to dopasowywanie się do szumu — w innym miejscu kanapy wyjdzie gorzej niż przed korekcją.<br><br>
-            <b style="color:#9aa3ab">Ale granica nie jest sztywna.</b> Uśrednienie wielu pozycji
-            i wygładzanie zmienne zostawiają to, co jest wspólne dla całej strefy — czyli własną
-            charakterystykę kolumny i szerokie tendencje pomieszczenia — a kasują to, co lokalne.
-            Na tym, co zostanie, można pracować i wyżej.<br><br>
-            <b style="color:#9aa3ab">Twarde kryterium</b> to minimalnofazowość. Rezonans modalny
-            jest minimalnofazowy i equalizer go odwraca. Odbicie nie jest — żaden filtr go nie usunie,
-            bo to opóźniona kopia, a nie zmiana barwy. Porównanie fazy zmierzonej z minimalnofazową
-            wyliczoną z amplitudy pokazuje czarno na białym, co wolno ruszać.
-          </div>
+        <div style="flex-grow:1;background:var(--sunken);border:1px solid var(--line-dim);
+                    border-radius:3px;padding:8px;min-height:${MH}px">
+          ${measureChart(MEAS_CHANNEL)}
         </div>
+
+        <div style="display:flex;gap:7px;margin-top:12px;align-items:center">
+          <span class="faint" style="font-size:11px">pozycja</span>
+          <input type="number" class="mini" id="meas-pos" min="1" max="12"
+                 value="${(positions.length ? Math.max(...positions) + 1 : 1)}" style="width:62px">
+          <button class="btn primary" data-meas="run" ${st.running ? 'disabled style="opacity:.5"' : ''}>
+            ${st.running ? 'Mierzę…' : 'Zmierz ' + esc(MEAS_CHANNEL)}
+          </button>
+          <button class="btn" data-meas="identify">Mapuj kanały</button>
+          <div class="grow"></div>
+          <span class="mono faint" style="font-size:11px">${esc(st.step || '')}</span>
+          <button class="btn" data-meas="clear">Wyczyść kanał</button>
+        </div>
+        ${st.error ? `<div class="red" style="font-size:11px;margin-top:9px">${esc(st.error)}</div>` : ''}
       </div>
     </div>
   </div>`;
@@ -1927,6 +2048,45 @@ function bind() {
   view.querySelectorAll('[data-switch]').forEach((b) =>
     b.onclick = () => cmd('switch', b.dataset.value, { control: b.dataset.switch }));
 
+  // --- pomiar
+  view.querySelectorAll('[data-measch]').forEach((b) =>
+    b.onclick = () => { MEAS_CHANNEL = b.dataset.measch;
+                        loadCurves(MEAS_CHANNEL); lastSignature = ''; render(); });
+  view.querySelectorAll('[data-dur]').forEach((b) =>
+    b.onclick = () => measAct('setup', { duration: parseFloat(b.dataset.dur) })
+      .then(() => loadMeasure()));
+  view.querySelectorAll('[data-meas]').forEach((b) => {
+    const a = b.dataset.meas;
+    if (a === 'setup') b.onclick = () => {
+      const ref = parseInt($('#meas-ref').value, 10);
+      measAct('setup', { setup: {
+        input_device: parseInt($('#meas-in').value, 10),
+        output_device: parseInt($('#meas-out').value, 10),
+        mic_channel: parseInt($('#meas-mic').value, 10),
+        reference_channel: ref < 0 ? null : ref,
+        output_channels: parseInt($('#meas-outch').value, 10),
+        input_channels: parseInt($('#meas-inch').value, 10),
+      }}).then(() => { toast('Tor zapisany', true); loadMeasure(); });
+    };
+    else if (a === 'check') b.onclick = () => measAct('check')
+      .then((r) => toast(r.ok ? 'Ta kombinacja da się otworzyć' : r.error, r.ok));
+    else if (a === 'monitor_start') b.onclick = () => measAct('monitor_start')
+      .then(() => { startLevelPolling(); toast('Podgląd poziomu włączony', true); });
+    else if (a === 'monitor_stop') b.onclick = () => measAct('monitor_stop')
+      .then(() => { stopLevelPolling(); LEVEL = null; lastSignature = ''; render(); });
+    else if (a === 'reset_clip') b.onclick = () => measAct('reset_clip');
+    else if (a === 'clear') b.onclick = () => measAct('clear', { channel: MEAS_CHANNEL })
+      .then(() => { CURVES[MEAS_CHANNEL] = null; loadMeasure(); });
+    else if (a === 'identify') b.onclick = () => measAct('identify')
+      .then(() => toast('Mapowanie kanałów — słuchaj, który głośnik gra', true));
+    else if (a === 'run') b.onclick = () => {
+      const pos = parseInt($('#meas-pos').value, 10) || 1;
+      measAct('run', { channel: MEAS_CHANNEL, position: pos })
+        .then(() => { toast('Mierzę ' + MEAS_CHANNEL + ', pozycja ' + pos, true);
+                      waitForMeasurement(); });
+    };
+  });
+
   // --- pilot Android TV
   view.querySelectorAll('[data-atvkey]').forEach((b) =>
     b.onclick = () => atvAct(b.dataset.atvhost, 'press', { value: b.dataset.atvkey })
@@ -2158,6 +2318,36 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault();
   webosAct('press', button);
 });
+
+
+/* Pomiar trwa kilka sekund — dopytujemy o stan, aż się skończy. */
+function waitForMeasurement() {
+  const t = setInterval(async () => {
+    await loadMeasure();
+    if (MEAS && MEAS.state && !MEAS.state.running) {
+      clearInterval(t);
+      await loadCurves(MEAS_CHANNEL);
+      if (MEAS.state.error) toast(MEAS.state.error, false);
+      else toast('Pomiar gotowy', true);
+    }
+  }, 900);
+}
+
+function startLevelPolling() {
+  stopLevelPolling();
+  levelTimer = setInterval(async () => {
+    if (TAB !== 'pomiar') return;
+    try {
+      LEVEL = await api('/api/measure/level');
+      const box = document.getElementById('levelbox');
+      if (box) box.innerHTML = levelMeter();
+    } catch (e) { /* cicho */ }
+  }, 250);
+}
+
+function stopLevelPolling() {
+  if (levelTimer) { clearInterval(levelTimer); levelTimer = null; }
+}
 
 /* ---------- start ---------- */
 
