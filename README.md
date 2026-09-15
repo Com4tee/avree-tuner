@@ -292,6 +292,26 @@ komendę. Wykryła to dopiero kontrola — znane komendy wstawione między
 się kontrolą, powtarza ją co 150 nazw i przerywa, gdy padnie.
 **Przemiat bez kontroli nie dowodzi niczego.**
 
+## Firmware i tryby serwisowe
+
+Analiza oryginalnych obrazów firmware i oficjalnego dokumentu serwisowego —
+pełny opis w [docs/firmware-i-serwis-x3300w.md](docs/firmware-i-serwis-x3300w.md).
+
+Skrót: **firmware jest zaszyfrowane** (kontener `host` + ECB, blok 8 bajtów,
+dwa klucze — osobny na kod, osobny na system plików). Udowodnione empirycznie,
+że to prawdziwy szyfr blokowy, nie XOR. Bez klucza, którego nie ma publicznie,
+nie da się go odczytać. To zamyka trzecią i ostatnią drogę do krzywych EQ.
+
+Przy okazji z oficjalnego arkusza Denona wyłuskane **tryby serwisowe X3300W**:
+reset mikroprocesora (`TUNER PRESET CH +`/`-`, nie czyści kalibracji), reset
+fabryczny (`ZONE 2 SOURCE`/`DIMMER` — czyści wszystko), Service Mode (tylko
+wyświetlacz czołowy). Oraz procedura aktualizacji USB i Product ID regionów.
+
+**Wniosek zbiorczy — krzywych Audyssey nie da się wyciągnąć żadną drogą:**
+telnet i protokół 1256 nie mają komendy odczytu, firmware jest zaszyfrowane,
+a tryb serwisowy jest front-panel. Odpowiedź na „skąd górka" daje wyłącznie
+pomiar różnicowy ON/OFF z zakładki Pomiar.
+
 ## Ograniczenia ustalone empirycznie
 
 - Odległości głośników **czyta i ustawia `SSSDE`**, krok 1 cm, każdy sub osobno.
