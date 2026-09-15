@@ -50,6 +50,27 @@ SPEAKER_SIZES = [("LAR", "Large"), ("SMA", "Small"), ("NON", "Brak")]
 
 CROSSOVER_FREQS = [40, 60, 80, 90, 100, 110, 120, 150, 200, 250]
 
+# Źródła, które przyjmują przypisanie wejścia. Kolejność jak w menu.
+INPUT_SOURCES = ["DVD", "BD", "TV", "SAT/CBL", "MPLAY", "GAME",
+                 "AUX1", "AUX2", "CD"]
+
+# Rodziny przypisań wejść - wszystkie odkryte przemiatem przestrzeni nazw,
+# żadna nie jest w oficjalnej dokumentacji protokołu.
+INPUT_ASSIGN = {
+    "SSHDM": {"label": "HDMI", "values": ["OFF", "HD1", "HD2", "HD3", "HD4",
+                                          "HD5", "HD6", "HD7", "HD8", "FRO"]},
+    "SSDIN": {"label": "Cyfrowe", "values": ["OFF", "COA1", "COA2", "OPT1",
+                                             "OPT2", "OPT3"]},
+    "SSANA": {"label": "Analogowe", "values": ["OFF", "AN1", "AN2", "AN3",
+                                               "AN4", "AN5", "AN6", "AN7"]},
+    "SSVDO": {"label": "Wideo", "values": ["OFF", "VD1", "VD2", "VD3"]},
+    "SSCMP": {"label": "Component", "values": ["OFF", "CP1", "CP2", "CP3"]},
+}
+
+# Zakres i format odległości. Krok bierzemy z urządzenia (SSSDESTP).
+DISTANCE_CHANNELS = ["FL", "FR", "C", "SL", "SR", "SW", "SW2",
+                     "SBL", "SBR", "SB", "FHL", "FHR"]
+
 # Klawisze nawigacji menu ekranowego - odpowiedniki strzałek na pilocie.
 OSD_KEYS = {
     "menu_on": "MNMEN ON", "menu_off": "MNMEN OFF",
@@ -167,6 +188,8 @@ class Avr:
             "tone_control": None, "drc_value": None,
             "channel_levels": {}, "setup_levels": {}, "sub_levels": {},
             "speakers": {}, "crossovers": {}, "distances": {},
+            "distances_dolby": {}, "inputs": {}, "source_levels": {},
+            "lipsync": {}, "osd": {},
             "distance_step_cm": 1,
             "subwoofer_mode": None, "lfe_lowpass": None, "crossover_mode": None,
             "amp_assign": None,
@@ -211,7 +234,9 @@ class Avr:
                         "lfe_lowpass", "crossover_mode", "amp_assign"):
                 self._state[key] = None
             for key in ("channel_levels", "setup_levels", "sub_levels",
-                        "speakers", "crossovers", "distances", "device"):
+                        "speakers", "crossovers", "distances",
+                        "distances_dolby", "inputs", "source_levels",
+                        "lipsync", "osd", "device"):
                 self._state[key] = {}
             self._state["sources"] = []
 
@@ -364,6 +389,34 @@ class Avr:
             elif ch and val.isdigit():
                 s["distances"][ch] = int(val)
 
+        # --- rodziny odkryte przemiatem przestrzeni nazw (SSHDM, SSANA...)
+        #
+        # Wszystkie mają ten sam kształt: PREFIKS + nazwa źródła + wartość.
+        # Nazwa źródła bywa ze znakiem ukośnika (SAT/CBL), więc dzielimy
+        # po OSTATNIej spacji, nie po pierwszej.
+        elif line[:5] in INPUT_ASSIGN:
+            family, rest = line[:5], line[5:]
+            source, _, value = rest.rpartition(" ")
+            if source and value:
+                s["inputs"].setdefault(family, {})[source] = value.strip()
+        elif line.startswith("SSSLD"):
+            source, _, value = line[5:].rpartition(" ")
+            if source and value.strip().isdigit():
+                s["source_levels"][source] = int(value)
+        elif line.startswith("SSALS"):
+            key, _, value = line[5:].partition(" ")
+            if key:
+                s["lipsync"][key] = value.strip()
+        elif line.startswith("SSOSD"):
+            key, _, value = line[5:].partition(" ")
+            if key:
+                s["osd"][key] = value.strip()
+        elif line.startswith("SSDSS"):
+            key, _, value = line[5:].partition(" ")
+            value = value.strip().rstrip("M")
+            if key and value.isdigit():
+                s["distances_dolby"][key] = int(value)
+
         elif line.startswith("SSSWM "):
             s["subwoofer_mode"] = line[6:].strip()
         elif line.startswith("SSLFL "):
@@ -431,6 +484,10 @@ class Avr:
             s["speakers"] = dict(self._state["speakers"])
             s["crossovers"] = dict(self._state["crossovers"])
             s["distances"] = dict(self._state["distances"])
+            for k in ("distances_dolby", "inputs", "source_levels",
+                      "lipsync", "osd"):
+                s[k] = {a: dict(b) if isinstance(b, dict) else b
+                        for a, b in self._state[k].items()}
             s["device"] = dict(self._state["device"])
             s["sources"] = [dict(x) for x in self._state["sources"]]
             s["host"] = self.host
@@ -445,6 +502,20 @@ class Avr:
             return self._log[-n:]
 
     # ---- wysyłanie ---------------------------------------------------
+
+    def ask(self, command: str, settle: float = 1.4) -> list[str]:
+        """Wysyła zapytanie i zwraca odpowiedzi, które przyszły po nim.
+
+        Potrzebne do zrzutu nastaw: idzie po istniejącym połączeniu, więc
+        nie otwiera nowych gniazd i nie odpytuje aplikacji przez jej własne
+        API. Zwraca wyłącznie linie przychodzące, bez echa własnej komendy.
+        """
+        with self._lock:
+            t = self._telnet
+        if t is None:
+            raise DenonTelnetError("brak połączenia z amplitunerem")
+        return [l for l in t.ask(command, settle=settle)
+                if l.strip() != command.strip()]
 
     def send(self, command: str) -> None:
         with self._lock:
@@ -461,7 +532,9 @@ class Avr:
                   "PSMULTEQ: ?", "PSDYNEQ ?", "PSDYNVOL ?", "PSREFLEV ?",
                   "PSGEQ ?", "PSCINEMA EQ. ?", "PSLOM ?", "PSDIC ?",
                   "PSRSZ ?", "PSNEURAL ?", "PSEFF ?", "PSDRC ?",
-                  "CV?", "PSSWL ?", "SSLEV ?", "SSSDE ?", "SSSPC ?", "SSCFR ?", "SSSWM ?", "SSLFL ?",
+                  "CV?", "PSSWL ?", "SSLEV ?", "SSSDE ?", "SSDSS ?", "SSSPC ?",
+                  "SSHDM ?", "SSDIN ?", "SSANA ?", "SSVDO ?", "SSCMP ?",
+                  "SSSLD ?", "SSALS ?", "SSOSD ?", "SSCFR ?", "SSSWM ?", "SSLFL ?",
                   "SSPAA ?", "SSINFAISSIG ?", "SSINFAISFSV ?",
                   "SSINFFRM ?", "NSFRN ?", "VIALL?", "SSFUN ?", "SSSOD ?"):
             try:
@@ -549,6 +622,23 @@ class Avr:
         self.send(f"SSSDE{channel} {value:04d}M")
         self._reread("SSSDE ?")
         return value
+
+    def set_input_assign(self, family: str, source: str, value: str) -> None:
+        """Przypisanie wejścia do źródła. Rodziny odkryte przemiatem."""
+        if family not in INPUT_ASSIGN:
+            raise ValueError(f"nieznana rodzina przypisań: {family}")
+        self.send(f"{family}{source} {value}")
+        self._reread(f"{family} ?")
+
+    def set_source_level(self, source: str, raw: int) -> None:
+        """Poziom źródła w skali Denona: 50 = 0,0 dB, krok 0,5 dB."""
+        value = int(max(38, min(62, raw)))
+        self.send(f"SSSLD{source} {value:02d}")
+        self._reread("SSSLD ?")
+
+    def set_lipsync(self, key: str, value: str) -> None:
+        self.send(f"SSALS{key} {value}")
+        self._reread("SSALS ?")
 
     def set_crossover(self, position: str, freq: int) -> None:
         self.send(f"SSCFR{position} {int(freq):03d}")

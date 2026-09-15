@@ -914,6 +914,126 @@ function viewGlosniki() {
 
 /* ---------- widok: Konfiguracja ---------- */
 
+/* ---------- odkrycia własne w menu setupu ----------
+   Rodziny komend znalezione przemiatem przestrzeni nazw: przypisanie wejść,
+   poziomy źródeł, lip sync, odległości. Żadnej z nich nie ma w oficjalnej
+   dokumentacji protokołu — opis w docs/nowe-komendy-x3300w.md. */
+
+const TIP_ODLEGL =
+  'Odległość każdego kanału w centymetrach, krok 1 cm = 29 µs. To są wartości, '
+  + 'które wyliczyło Audyssey — dla subwooferów NIE są to odległości fizyczne, '
+  + 'tylko wyrównanie czasowe z Sub EQ HT. Zmiana nie unieważnia filtrów korekcji.';
+const TIP_WEJSCIA =
+  'Które gniazdo obsługuje które źródło. Komendy SSHDM, SSDIN, SSANA, SSVDO i SSCMP — '
+  + 'żadnej nie ma w oficjalnej dokumentacji, znaleziono je przemiatem przestrzeni nazw.';
+const TIP_POZIOM_ZR =
+  'Poziom każdego źródła osobno (SSSLD). Pozwala wyrównać głośność między wejściami '
+  + 'bez ruszania poziomów kanałów. Skala Denona: 50 = 0,0 dB, krok 0,5 dB.';
+const TIP_LIPSYNC =
+  'Auto Lip Sync (SSALS): SET włącza automatykę, VAL pokazuje opóźnienie w ms, '
+  + 'które wzmacniacz sam wyliczył z sygnału HDMI.';
+const TIP_KOPIA =
+  'Zapisuje wszystkie odczytywalne nastawy do pliku: JSON plus gotową listę komend '
+  + 'do wklejenia. Przywrócenie nie wymaga tej aplikacji — wystarczy telnet. '
+  + 'Najcenniejsza pozycja to różnica odległości subwooferów, czyli wyrównanie '
+  + 'czasowe z Sub EQ HT, którego nie odtworzysz bez mikrofonu Denona.';
+
+function cardOdleglosci() {
+  const d = STATE.distances || {};
+  const chans = (STATE.distance_channels || []).filter((c) => d[c] != null);
+  if (!chans.length) return '';
+  const step = STATE.distance_step_cm || 1;
+  const sw = d.SW, sw2 = d.SW2;
+  const roznica = (sw != null && sw2 != null) ? sw2 - sw : null;
+
+  return `
+  <div class="card">
+    <h3${rawTip(TIP_ODLEGL, 'Odległości kanałów')}>ODLEGŁOŚCI KANAŁÓW</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:7px">
+      ${chans.map((c) => `
+        <label style="display:flex;gap:6px;align-items:center;font-size:12px">
+          <span class="dim mono" style="width:34px">${esc(c)}</span>
+          <input type="number" data-dist="${esc(c)}" value="${d[c]}" step="${step}"
+                 min="0" max="1800" style="width:72px"> cm
+        </label>`).join('')}
+    </div>
+    ${roznica != null ? `
+    <div class="banner" style="margin-top:11px"><div class="grow">
+      <div class="t">Różnica subwooferów: ${roznica} cm = ${(roznica / 100 / 343 * 1000).toFixed(2)} ms</div>
+      <div class="d">To jest wyrównanie czasowe wypracowane przez Sub EQ HT — jedyna nastawa,
+      której nie odtworzysz bez mikrofonu Denona wpiętego we wzmacniacz. Zapisz ją, zanim
+      cokolwiek przekalibrujesz.</div></div></div>` : ''}
+    <div class="faint" style="font-size:11px;margin-top:9px">
+      Krok ${step} cm = ${(step / 100 / 343 * 1000).toFixed(3)} ms. Zmiana wchodzi po opuszczeniu pola.
+    </div>
+  </div>`;
+}
+
+function cardWejscia() {
+  const rodziny = STATE.input_assign || {};
+  const zrodla = STATE.input_sources || [];
+  const stan = STATE.inputs || {};
+  const poziomy = STATE.source_levels || {};
+  if (!zrodla.length) return '';
+
+  const naglowki = Object.keys(rodziny).map((f) =>
+    `<th style="font-weight:500;font-size:11px;text-align:left;padding:3px 5px">${esc(rodziny[f].label)}</th>`).join('');
+
+  const wiersze = zrodla.map((src) => `
+    <tr>
+      <td class="mono" style="font-size:11.5px;padding:3px 5px">${esc(src)}</td>
+      ${Object.keys(rodziny).map((f) => {
+        const cur = (stan[f] || {})[src] || 'OFF';
+        return `<td style="padding:2px 4px"><select data-assign="${f}" data-src="${esc(src)}" style="width:100%;font-size:11px">
+          ${rodziny[f].values.map((v) => `<option value="${v}"${v === cur ? ' selected' : ''}>${v}</option>`).join('')}
+        </select></td>`;
+      }).join('')}
+      <td style="padding:2px 4px">
+        <input type="number" data-slevel="${esc(src)}" value="${poziomy[src] != null ? poziomy[src] : 50}"
+               min="38" max="62" style="width:56px;font-size:11px">
+      </td>
+    </tr>`).join('');
+
+  return `
+  <div class="card">
+    <h3${rawTip(TIP_WEJSCIA, 'Przypisanie wejść')}>WEJŚCIA I ŹRÓDŁA</h3>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <tr><th style="font-weight:500;font-size:11px;text-align:left;padding:3px 5px">Źródło</th>
+          ${naglowki}
+          <th style="font-weight:500;font-size:11px;text-align:left;padding:3px 5px"${rawTip(TIP_POZIOM_ZR, 'Poziom źródła')}>Poziom</th></tr>
+        ${wiersze}
+      </table>
+    </div>
+    <div class="faint" style="font-size:11px;margin-top:10px;line-height:1.5">
+      Wszystkie te komendy — <span class="mono">SSHDM</span>, <span class="mono">SSDIN</span>,
+      <span class="mono">SSANA</span>, <span class="mono">SSVDO</span>, <span class="mono">SSCMP</span>,
+      <span class="mono">SSSLD</span> — znaleźliśmy sami, przemiatając przestrzeń nazw.
+      Nie ma ich w żadnej dokumentacji protokołu. Poziom w skali Denona: 50 = 0,0 dB.
+    </div>
+  </div>`;
+}
+
+function cardKopia() {
+  const ls = STATE.lipsync || {};
+  return `
+  <div class="card">
+    <h3>KOPIA NASTAW I LIP SYNC</h3>
+    <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+      <button class="btn primary" data-act="kopia"${rawTip(TIP_KOPIA, 'Kopia nastaw')}>Zapisz kopię nastaw</button>
+      <div class="grow"></div>
+      <span class="dim" style="font-size:12px"${rawTip(TIP_LIPSYNC, 'Auto Lip Sync')}>Auto Lip Sync</span>
+      <button class="btn ${ls.SET === 'ON' ? 'on' : ''}" data-lip="SET"
+              data-lipval="${ls.SET === 'ON' ? 'OFF' : 'ON'}">${ls.SET === 'ON' ? 'włączony' : 'wyłączony'}</button>
+      <span class="mono faint" style="font-size:11px">${ls.VAL != null ? ls.VAL + ' ms' : ''}</span>
+    </div>
+    <div id="kopiainfo" class="faint" style="font-size:11px;margin-top:9px;line-height:1.5">
+      Kopia trafia do <span class="mono">kopie-nastaw\\</span> jako JSON i jako lista komend
+      do wklejenia. Katalog jest poza repozytorium — zrzut zawiera numer seryjny.
+    </div>
+  </div>`;
+}
+
 function viewKonfiguracja() {
   const s = STATE;
   const speakers = s.speakers || {};
@@ -1078,7 +1198,11 @@ function viewKonfiguracja() {
         </div>
       </div>
     </div>
-  </div>`;
+  </div>
+  ${cardOdleglosci()}
+  ${cardWejscia()}
+  ${cardKopia()}
+`;
 }
 
 
@@ -2725,6 +2849,22 @@ function bind() {
     else if (act === 'scan') b.onclick = () => startScan();
     else if (act === 'raw') b.onclick = () => sendRaw();
     else if (act === 'play') b.onclick = () => sendPlay();
+    else if (act === 'kopia') b.onclick = async () => {
+      const box = $('#kopiainfo');
+      if (box) box.textContent = 'zapisuję…';
+      try {
+        const r = await api('/api/command', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'kopia_nastaw' })
+        });
+        const b = r.backup || {};
+        const h = b.highlights || {};
+        if (box) box.innerHTML = `Zapisano <b>${b.count}</b> komend przywracających do
+          <span class="mono">${esc(b.commands || '')}</span>.<br>
+          Różnica subwooferów: <b>${h.sub_offset_cm} cm = ${h.sub_offset_ms} ms</b>.`;
+        toast('Kopia nastaw zapisana', true);
+      } catch (e) { toast(e.message, false); if (box) box.textContent = e.message; }
+    };
   });
 
   view.querySelectorAll('[data-str]').forEach((b) => {
@@ -2761,6 +2901,23 @@ function bind() {
     };
   });
   if (TAB === 'odtwarzanie') screenTick();
+
+  view.querySelectorAll('[data-dist]').forEach((inp) => {
+    inp.onchange = () => cmd('distance_cm', parseInt(inp.value, 10),
+                             { channel: inp.dataset.dist })
+      .then(() => toast(inp.dataset.dist + ' = ' + inp.value + ' cm', true));
+  });
+  view.querySelectorAll('[data-assign]').forEach((sel) => {
+    sel.onchange = () => cmd('input_assign', sel.value,
+                             { family: sel.dataset.assign, source: sel.dataset.src });
+  });
+  view.querySelectorAll('[data-slevel]').forEach((inp) => {
+    inp.onchange = () => cmd('source_level', parseInt(inp.value, 10),
+                             { source: inp.dataset.slevel });
+  });
+  view.querySelectorAll('[data-lip]').forEach((b) => {
+    b.onclick = () => cmd('lipsync', b.dataset.lipval, { key: b.dataset.lip });
+  });
 
   view.querySelectorAll('[data-sa]').forEach((b) => {
     const act = b.dataset.sa;

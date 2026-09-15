@@ -25,6 +25,9 @@ from . import (androidtv, cast, discovery, eq,
                upnp, webos)
 from .avr import (
     CROSSOVER_FREQS,
+    INPUT_ASSIGN,
+    INPUT_SOURCES,
+    DISTANCE_CHANNELS,
     OSD_KEYS,
     TONE_CONTROLS,
     TONE_SWITCHES,
@@ -228,6 +231,9 @@ class Handler(BaseHTTPRequestHandler):
         state["speaker_sizes"] = [{"code": c, "label": l} for c, l in SPEAKER_SIZES]
         state["crossover_freqs"] = CROSSOVER_FREQS
         state["speaker_positions"] = SPEAKER_POSITIONS
+        state["input_assign"] = INPUT_ASSIGN
+        state["input_sources"] = INPUT_SOURCES
+        state["distance_channels"] = DISTANCE_CHANNELS
         state["tips"] = TIPS
         state["tone_controls"] = TONE_CONTROLS
         state["tone_switches"] = TONE_SWITCHES
@@ -410,6 +416,21 @@ class Handler(BaseHTTPRequestHandler):
             return avr.set_switch(str(body.get("control")), str(value))
 
         # --- menu ekranowe (jedyna droga do uruchomienia kalibracji Audyssey)
+        elif action == "input_assign":
+            avr.set_input_assign(str(body.get("family","")),
+                                 str(body.get("source","")), str(value))
+        elif action == "source_level":
+            avr.set_source_level(str(body.get("source","")), int(value))
+        elif action == "distance_cm":
+            avr.set_distance_cm(str(body.get("channel","")), int(value))
+        elif action == "lipsync":
+            avr.set_lipsync(str(body.get("key","")), str(value))
+        elif action == "kopia_nastaw":
+            from pathlib import Path as _P
+            from . import backup as _b
+            return {"ok": True,
+                    "backup": _b.save(avr.host, _P("kopie-nastaw"),
+                                      ask=lambda q: avr.ask(q))}
         elif action == "osd":
             avr.osd(str(value))
 

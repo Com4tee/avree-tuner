@@ -10,3 +10,6 @@ venv/
 .env
 .idea/
 .vscode/
+
+# Zrzuty nastaw - zawieraja numer seryjny (VIALL) i konfiguracje pokoju.
+kopie-nastaw/
