@@ -9,6 +9,26 @@ let RENDERER = null;
 let STREAM = null;
 let SCAN = null;
 let TAB = 'pulpit';
+
+/* ---------- skórki (motywy wyglądu) ----------
+   Trzy motywy przez zmienne CSS w app.css. Wybór trzymamy w localStorage —
+   to preferencja tej przeglądarki, nie stan urządzenia, więc nie idzie na
+   serwer. Zastosowanie musi być NATYCHMIASTOWE przy starcie, żeby nie mrugało. */
+const SKINS = [
+  { id: '', label: 'Instrument', desc: 'ciemny neutralny · teal · gęsto i precyzyjnie' },
+  { id: 'warm', label: 'Ciepłe hi-fi', desc: 'ciepła czerń · mosiądz · szeryf na liczbach' },
+  { id: 'cinema', label: 'Kino', desc: 'prawie czerń · cyan · Space Grotesk' },
+];
+function currentSkin() {
+  try { return localStorage.getItem('avree-skin') || ''; } catch (e) { return ''; }
+}
+function applySkin(id) {
+  if (id) document.documentElement.setAttribute('data-skin', id);
+  else document.documentElement.removeAttribute('data-skin');
+  try { localStorage.setItem('avree-skin', id); } catch (e) { /* prywatne okno */ }
+}
+applySkin(currentSkin());
+
 let toastTimer = null;
 
 const $ = (sel, root) => (root || document).querySelector(sel);
@@ -1034,6 +1054,43 @@ function cardKopia() {
   </div>`;
 }
 
+function cardWyglad() {
+  const cur = currentSkin();
+  const tiles = SKINS.map((sk) => {
+    const on = sk.id === cur;
+    // miniaturka palety motywu, żeby wybór był na oko, nie z nazwy
+    const swatch = {
+      '': ['#0e1012', '#16191c', '#3fc0c4', '#e8a33d'],
+      'warm': ['#14110d', '#1c1811', '#c9962f', '#d9a441'],
+      'cinema': ['#08090b', '#0f1216', '#35e0d0', '#e8a33d'],
+    }[sk.id];
+    return `
+      <button data-skin-pick="${sk.id}" style="text-align:left; padding:0; overflow:hidden;
+        background:var(--panel2); border:1px solid ${on ? 'var(--teal)' : 'var(--line)'};
+        border-radius:var(--radius); cursor:pointer;">
+        <div style="display:flex; height:46px;">
+          ${swatch.map((c, i) => `<div style="flex:${i < 2 ? 3 : 1}; background:${c};"></div>`).join('')}
+        </div>
+        <div style="padding:9px 11px;">
+          <div style="display:flex; align-items:center; gap:7px;">
+            <span style="font-size:13px; font-weight:600; color:${on ? 'var(--teal)' : 'var(--text)'};">${esc(sk.label)}</span>
+            ${on ? '<span style="font-size:10px; color:var(--teal);">● aktywny</span>' : ''}
+          </div>
+          <div style="font-size:11px; color:var(--dim); margin-top:3px;">${esc(sk.desc)}</div>
+        </div>
+      </button>`;
+  }).join('');
+  return `
+  <div class="card">
+    <h3>WYGLĄD APLIKACJI</h3>
+    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:11px;">${tiles}</div>
+    <div class="faint" style="font-size:11px; margin-top:11px; line-height:1.5;">
+      Skórka zmienia paletę, akcent i typografię — układ zostaje. Wybór zapamiętuje ta
+      przeglądarka. Wchodzi od razu, bez restartu.
+    </div>
+  </div>`;
+}
+
 function viewKonfiguracja() {
   const s = STATE;
   const speakers = s.speakers || {};
@@ -1199,6 +1256,7 @@ function viewKonfiguracja() {
       </div>
     </div>
   </div>
+  ${cardWyglad()}
   ${cardOdleglosci()}
   ${cardWejscia()}
   ${cardKopia()}
@@ -2902,6 +2960,9 @@ function bind() {
   });
   if (TAB === 'odtwarzanie') screenTick();
 
+  view.querySelectorAll('[data-skin-pick]').forEach((b) => {
+    b.onclick = () => { applySkin(b.dataset.skinPick); lastSignature = ''; render(); };
+  });
   view.querySelectorAll('[data-dist]').forEach((inp) => {
     inp.onchange = () => cmd('distance_cm', parseInt(inp.value, 10),
                              { channel: inp.dataset.dist })

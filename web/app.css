@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Spectral:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 :root {
   --bg: #0e1012;
@@ -16,6 +16,32 @@
   --amber: #e8a33d;
   --red: #e8635a;
   --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  /* zmienne skórki — nadpisywane przez [data-skin] */
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-hero: 'IBM Plex Mono', ui-monospace, monospace;
+  --radius: 3px;
+}
+
+/* ---------- SKÓRKA: Ciepłe hi-fi ---------- */
+:root[data-skin="warm"] {
+  --bg: #14110d; --rail: #17130d; --panel: #1c1811; --panel2: #221c13;
+  --sunken: #100d09; --line: #2c2519; --line-dim: #241e14;
+  --text: #e6ddcd; --dim: #9c9077; --faint: #6b5f45; --ghost: #4a4030;
+  --teal: #c9962f; --amber: #d9a441; --red: #d67a5a;
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-hero: 'Spectral', Georgia, serif;
+  --radius: 9px;
+}
+
+/* ---------- SKÓRKA: Kino ---------- */
+:root[data-skin="cinema"] {
+  --bg: #08090b; --rail: #0b0d10; --panel: #0f1216; --panel2: #14181d;
+  --sunken: #0a0c0f; --line: #1c2127; --line-dim: #171b20;
+  --text: #e4e9ee; --dim: #8a95a0; --faint: #5a646d; --ghost: #38424c;
+  --teal: #35e0d0; --amber: #e8a33d; --red: #e8635a;
+  --font-sans: 'Space Grotesk', system-ui, sans-serif;
+  --font-hero: 'Space Grotesk', system-ui, sans-serif;
+  --radius: 11px;
 }
 
 * { box-sizing: border-box; }
@@ -23,7 +49,7 @@
 html, body {
   margin: 0; height: 100%;
   background: var(--bg); color: var(--text);
-  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -44,7 +70,7 @@ html, body {
 .dot.off { background: var(--red); }
 .chip {
   display: flex; align-items: center; gap: 8px; padding: 4px 10px;
-  background: var(--panel2); border: 1px solid var(--line); border-radius: 3px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius);
   font-size: 12px;
 }
 .grow { flex-grow: 1; }
@@ -67,7 +93,7 @@ html, body {
 .content { padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
 
 /* --- karty --- */
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 3px; padding: 13px 15px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 13px 15px; }
 .card.warn { border-color: #6b4a1f; }
 .card.alert { border-color: #7a3230; }
 .card h3 { margin: 0 0 11px; font-size: 10px; letter-spacing: .16em; color: var(--faint); font-weight: 400; }
@@ -82,7 +108,7 @@ html, body {
 /* --- przyciski i pigułki --- */
 .pill {
   padding: 9px 11px; background: var(--panel2); border: 1px solid var(--line);
-  border-radius: 3px; font: inherit; font-size: 12px; color: var(--text);
+  border-radius: var(--radius); font: inherit; font-size: 12px; color: var(--text);
   cursor: pointer; text-align: left;
 }
 .pill:hover { border-color: var(--ghost); }
@@ -92,7 +118,7 @@ html, body {
 .pill.center { text-align: center; }
 
 .btn { padding: 7px 13px; background: var(--panel2); border: 1px solid var(--line);
-       border-radius: 3px; font: inherit; font-size: 12px; color: #9aa3ab; cursor: pointer; }
+       border-radius: var(--radius); font: inherit; font-size: 12px; color: #9aa3ab; cursor: pointer; }
 .btn:hover { color: var(--text); border-color: var(--ghost); }
 .btn.primary { background: var(--teal); border-color: var(--teal); color: #0e1012; font-weight: 600; }
 .btn.danger { background: var(--amber); border-color: var(--amber); color: #12140f; font-weight: 600; }
@@ -104,7 +130,7 @@ input[type=text], input[type=number] {
 input:focus { outline: none; border-color: var(--teal); }
 
 /* --- głośność --- */
-.vol-num { font-family: var(--mono); font-size: 42px; font-weight: 500; line-height: 1; }
+.vol-num { font-family: var(--font-hero); font-size: 42px; font-weight: 500; line-height: 1; }
 .vol-bar { height: 5px; background: #23282d; border-radius: 3px; overflow: hidden; position: relative; }
 .vol-bar i { display: block; height: 100%; background: var(--teal); }
 .vol-bar u { position: absolute; top: -3px; width: 2px; height: 11px; background: var(--red); }
