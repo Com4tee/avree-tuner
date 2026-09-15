@@ -94,19 +94,51 @@ takimi, jakie są, zamiast zgadywać:
 | `SSSIM` | `SSSIM 6HM` | kod układu głośników |
 | `SSSUD` | `SSSUD NO` | obecność głośników surround Dolby |
 | `PSHEQ` | `PSHEQ OFF` | korekcja dla słuchawek |
+| `SSINFCON` | `SSINFCON NON` | informacja o połączeniu |
+
+## Pułapka druga: echo to nie odpowiedź
+
+Rodzina `SY` dała **26 „trafień", z których wszystkie były fałszywe**.
+„Odpowiedzią" była dosłownie wysłana komenda: na `SYCBF ?` wracało `SYCBF ?`.
+
+To nie jest odpowiedź na zapytanie — to potwierdzenie **zapisu**. Komendy
+`SYCB` + litera przyjmują parametr, a znak `?` został potraktowany jako
+wartość, nie jako pytanie. Dla porównania `SYZZZ ?` i `SYQQQ ?` milczą
+całkowicie, więc echo nie jest zachowaniem ogólnym całej rodziny.
+
+Dwa wnioski:
+
+1. **Detekcja trafień musi odrzucać echo.** Odpowiedź identyczna z wysłaną
+   komendą nie jest odpowiedzią.
+2. **Przemiatu `SY` nie dokończono świadomie.** Ta rodzina zachowuje się jak
+   zbiór setterów, a przemiatanie setterów oznacza wysyłanie przypadkowych
+   wartości do cudzego urządzenia. Po zatrzymaniu sprawdzono wszystkie
+   istotne nastawy (odległości, poziomy, konfiguracja, podziały, tryby
+   Audyssey, tryb subwoofera) — **wszystkie nienaruszone**.
 
 ## Czego NIE ma
 
-Przemiat objął **35 152 nazwy** w przestrzeniach `SS` i `PS` plus około
-**2 100 nazw odczytowych** w protokole Audyssey na porcie 1256. Nie istnieje
-żadna komenda odczytująca:
+Przemiat objął łącznie około **72 000 nazw komend**:
+
+| Przestrzeń | Liczba | Nowych |
+|---|---|---|
+| `SS` + 3 litery | 17 576 | 15 |
+| `PS` + 3 litery | 17 576 | 1 (`PSHEQ`) |
+| `MN` + 3 litery | 17 576 | 0 |
+| `SSINF` + 3 litery | 17 576 | 1 (`SSINFCON`) |
+| protokół 1256, nazwy odczytowe | ~2 100 | 0 |
+| `SY` + 3 litery | przerwane | — |
+
+Do tego 10 009 portów TCP, 2 000 portów UDP i 1 090 ścieżek HTTP.
+
+Nie istnieje żadna komenda odczytująca:
 
 - współczynniki filtrów korekcyjnych,
 - krzywe MultEQ zapisane w procesorze,
 - surowe dane pomiarowe z przeprowadzonej kalibracji.
 
-Przemiat `MN` (menu) przerwano na 13 200/17 567 przy zerowej liczbie trafień —
-ten zakres pozostaje **niedokończony**.
+Przestrzeń `MN` przemierzono w całości — zero trafień poza dziewięcioma
+znanymi komendami nawigacji.
 
 ## Porty
 
@@ -134,5 +166,7 @@ równolegle, bez odbierania nikomu sterowania.
 
 - Czy `SSGCF`, `SSSIM`, `SSINA`, `SSSUD`, `SSFRS` znaczą to, co podejrzewamy.
 - Czy te komendy odpowiadają na innych modelach z tej generacji.
-- Zakres `MN` + 3 litery, niedokończony.
+- Rodzina `SY`, a zwłaszcza `SYCB` + litera — co ustawia i czy da się
+  ją odczytać bezpieczną składnią. My nie kontynuowaliśmy, bo to settery
+  na cudzym urządzeniu.
 - Czy `SSSLD` faktycznie zmienia głośność źródła (u nas tylko odczytane).
