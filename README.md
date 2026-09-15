@@ -1,6 +1,10 @@
-# AVREE Tuner
+<img src="web/logo.svg" alt="AVREE — Universal Remote" width="440">
+
+# AVREE — Universal Remote
 
 Sterowanie amplitunerem Denon AVR-X3300W i kalibracja Audyssey MultEQ XT32 z poziomu PC.
+Docelowo uniwersalne centrum sieciowego sprzętu RTV (patrz
+[plan uniwersalizacji](docs/plan-uniwersalizacja.md)).
 
 Dwa cele:
 

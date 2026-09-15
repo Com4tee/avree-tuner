@@ -60,10 +60,11 @@ html, body {
   display: flex; align-items: center; gap: 18px; padding: 0 18px;
   background: var(--rail); border-bottom: 1px solid var(--line);
 }
-.brand { display: flex; align-items: baseline; gap: 9px; }
-.brand b { font-family: var(--mono); font-size: 15px; font-weight: 600;
-           letter-spacing: .14em; color: var(--amber); }
-.brand span { font-size: 12px; letter-spacing: .2em; color: var(--dim); }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark { width: 24px; height: 24px; flex-shrink: 0; }
+.brand b { font-family: 'Space Grotesk', var(--font-sans); font-size: 16px; font-weight: 700;
+           letter-spacing: .14em; color: var(--text); line-height: 1; }
+.brand span { font-size: 9px; letter-spacing: .22em; color: var(--dim); align-self: center; }
 .sep { width: 1px; height: 22px; background: var(--line); }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ghost); }
 .dot.on { background: var(--teal); }

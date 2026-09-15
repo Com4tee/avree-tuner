@@ -176,7 +176,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if route == "/":
             self._static("index.html")
-        elif route in ("/app.js", "/app.css"):
+        elif route in ("/app.js", "/app.css", "/logo.svg"):
             self._static(route.lstrip("/"))
         elif route == "/api/state":
             self._json(self._state_payload())
