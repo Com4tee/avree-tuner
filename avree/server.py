@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from . import (androidtv, cast, discovery, eq,
+from . import (androidtv, capabilities as caps_mod, cast, discovery, eq,
                projector as projector_mod, session as session_mod,
                display as display_mod,
                stream as stream_mod, subalign as subalign_mod,
@@ -94,12 +94,24 @@ class App:
         self.cast = cast.CastHub()
         # Splot w torze PC: pętla systemowa -> filtr -> amplituner.
         self.stream = stream_mod.LoopbackStream()
+        # Możliwości urządzenia z Deviceinfo.xml — cache per host,
+        # bo manifest ma 64 KB i nie zmienia się w trakcie pracy.
+        self._caps = None
+        self._caps_host = None
         # Zestrajanie czasowe dwóch subwooferów — przemiatanie
         # odległości SW2 z pomiarem mikrofonem.
         self.subalign = subalign_mod.SubAlign()
         # Podgląd ekranu — osobne gniazdo na porcie 5000, bo port 23
         # przyjmuje tylko jedno połączenie i trzyma je sterowanie.
         self.display = display_mod.Display(avr.host)
+
+    def ensure_capabilities(self):
+        """Model możliwości podłączonego amplitunera, z cache per host."""
+        host = self.avr.host
+        if self._caps is None or self._caps_host != host:
+            self._caps = caps_mod.read(host)
+            self._caps_host = host
+        return self._caps
 
     def ensure_renderer(self) -> upnp.Renderer | None:
         if self.renderer is None and self.renderer_error is None:
@@ -211,6 +223,8 @@ class Handler(BaseHTTPRequestHandler):
                         "note": self.app.webos.scan_note,
                         "scanning": self.app.webos.scanning,
                         "buttons": webos.PointerInput.BUTTONS})
+        elif route == "/api/capabilities":
+            self._json(self.app.ensure_capabilities().to_dict())
         elif route == "/api/display":
             self._json(self.app.display.refresh(self.app.avr.host))
         elif route == "/api/subalign":

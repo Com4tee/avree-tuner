@@ -1054,6 +1054,70 @@ function cardKopia() {
   </div>`;
 }
 
+let CAPS = null;
+
+/* ---------- możliwości urządzenia (z Deviceinfo.xml) ----------
+   Pierwszy krok uniwersalizacji: pokazać, co PODŁĄCZONY model faktycznie umie,
+   zamiast zakładać X3300W. To samo źródło (manifest) napędzi docelowo cały
+   interfejs — funkcje, których model nie ma, po prostu znikną. */
+
+const CAP_LABELS = {
+  audyssey: 'Audyssey', multeq: 'MultEQ', dynamic_eq: 'Dynamic EQ',
+  dynamic_volume: 'Dynamic Volume', reference_level: 'Reference Level',
+  graphic_eq: 'Graphic EQ', tone_control: 'Regulacja barwy', cinema_eq: 'Cinema EQ',
+  dts_neural_x: 'DTS Neural:X', auro_3d: 'Auro-3D', lfc: 'Audyssey LFC',
+  dialog_control: 'Dialog Control', restorer: 'Restorer', audio_delay: 'Audio Delay',
+  auto_lip_sync: 'Auto Lip Sync', subwoofer_level: 'Poziom subwoofera',
+  channel_level: 'Poziomy kanałów', speaker_ab: 'Speaker A/B',
+  all_zone_stereo: 'All-Zone Stereo', bass: 'Bas', treble: 'Sopran',
+  sleep_timer: 'Sleep Timer', wakeup_timer: 'Wakeup Timer',
+  firmware_update: 'Aktualizacja FW', loudness: 'Loudness', lfe: 'LFE',
+};
+
+function cardMozliwosci() {
+  if (!CAPS) { setTimeout(loadCaps, 0); return '<div class="card"><h3>MOŻLIWOŚCI URZĄDZENIA</h3><div class="dim">czytam manifest…</div></div>'; }
+  if (CAPS.error) return `<div class="card"><h3>MOŻLIWOŚCI URZĄDZENIA</h3><div class="dim" style="font-size:12px">${esc(CAPS.error)}</div></div>`;
+
+  const fl = CAPS.flags || {};
+  const keys = Object.keys(CAP_LABELS).filter((k) => k in fl);
+  const chips = keys.map((k) => {
+    const on = fl[k];
+    return `<span style="display:inline-flex; align-items:center; gap:6px; padding:5px 10px;
+      background:${on ? 'var(--panel2)' : 'transparent'};
+      border:1px solid ${on ? 'var(--line)' : 'var(--line-dim)'}; border-radius:var(--radius);
+      font-size:11.5px; color:${on ? 'var(--text)' : 'var(--ghost)'};">
+      <span style="color:${on ? 'var(--teal)' : 'var(--ghost)'}; font-size:12px;">${on ? '●' : '○'}</span>
+      ${esc(CAP_LABELS[k])}</span>`;
+  }).join('');
+
+  const have = keys.filter((k) => fl[k]).length;
+  return `
+  <div class="card">
+    <h3>MOŻLIWOŚCI URZĄDZENIA — Z MANIFESTU</h3>
+    <div class="row" style="margin-bottom:12px">
+      <span class="k">Model</span><span class="v">${esc(CAPS.model || '—')}</span>
+      <span class="k">Strefy</span><span class="v">${CAPS.zones}</span>
+      <span class="k">API</span><span class="v">${esc(CAPS.api_vers || '—')}</span>
+      <span class="k">Funkcji w manifeście</span><span class="v">${Object.keys(CAPS.functions || {}).length}</span>
+      <span class="k">Źródeł</span><span class="v">${(CAPS.sources || []).length}</span>
+      <span class="k">Kanałów</span><span class="v">${(CAPS.channels || []).length}</span>
+    </div>
+    <div style="display:flex; flex-wrap:wrap; gap:6px;">${chips}</div>
+    <div class="faint" style="font-size:11px; margin-top:11px; line-height:1.5;">
+      Odczytane z <span class="mono">Deviceinfo.xml</span> podłączonego amplitunera — ${have} z ${keys.length}
+      cech obecnych. To samo źródło napędzi docelowo cały interfejs: funkcje, których dany model
+      nie ma (tu np. <b>Auro-3D</b> i <b>Audyssey LFC</b>), po prostu znikną z widoku. Pierwszy krok
+      uniwersalizacji — appka przestaje zakładać konkretny model.
+    </div>
+  </div>`;
+}
+
+async function loadCaps() {
+  try { CAPS = await api('/api/capabilities'); }
+  catch (e) { CAPS = { error: e.message, flags: {} }; }
+  if (TAB === 'konfiguracja') render();
+}
+
 function cardWyglad() {
   const cur = currentSkin();
   const tiles = SKINS.map((sk) => {
@@ -1256,6 +1320,7 @@ function viewKonfiguracja() {
       </div>
     </div>
   </div>
+  ${cardMozliwosci()}
   ${cardWyglad()}
   ${cardOdleglosci()}
   ${cardWejscia()}
