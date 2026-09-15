@@ -272,6 +272,26 @@ Pozostałe otwarte porty, sprawdzone: 1024 to AirPlay (`AirTunes/190.9`),
 5001 to konsola z promptem `>`, która nie zna żadnego z 49 przetestowanych
 słów, 6666 milczy na wszystko.
 
+## Szesnaście nieudokumentowanych komend
+
+Systematyczny przemiat **pełnej przestrzeni `SS`+3 i `PS`+3 litery** (po 17 576
+kombinacji) dwoma niezależnymi torami — port 23 i port 5000 — dał zgodny wynik:
+**15 nieudokumentowanych komend `SS` plus `PSHEQ`**.
+
+Najciekawsze: `SSHDM`/`SSANA`/`SSDIN`/`SSVDO` (przypisanie wejść per źródło),
+`SSSLD` (poziom każdego źródła osobno), `SSDSS` (odległości głośników
+Dolby-enabled), `SSALS` (Auto Lip Sync), `SSOSD` (menu ekranowe).
+
+Pełny opis wraz z metodą i odczytami: [docs/nowe-komendy-x3300w.md](docs/nowe-komendy-x3300w.md).
+
+**Lekcja metodologiczna.** Pierwsza wersja przemiatu na porcie 1256 była
+zepsuta i zwracała „zero trafień" wyglądające jak rzetelny negatyw:
+potokowała ramki, a wzmacniacz odpowiadał tylko na pierwszą rozpoznaną
+komendę. Wykryła to dopiero kontrola — znane komendy wstawione między
+śmieciowe nazwy nie zostały wykryte. Od tego czasu każdy przemiat zaczyna
+się kontrolą, powtarza ją co 150 nazw i przerywa, gdy padnie.
+**Przemiat bez kontroli nie dowodzi niczego.**
+
 ## Ograniczenia ustalone empirycznie
 
 - Odległości głośników **czyta i ustawia `SSSDE`**, krok 1 cm, każdy sub osobno.
