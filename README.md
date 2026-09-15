@@ -347,6 +347,34 @@ na routerze.
 
 ## Do zweryfikowania w następnej sesji
 
+### Niezależny EQ na każdy subwoofer — pierwszy punkt do sprawdzenia
+
+Zestaw: **SW1 = dwie tuby, SW2 = pojedynczy bas-reflex** — fundamentalnie różne
+konstrukcje (inne opadanie, inne opóźnienie grupowe, inne rezonanse). Jedną
+wspólną krzywą nie da się poprawić obu naraz, więc niezależny EQ per sub byłby
+najmocniejszym argumentem za torem własnym.
+
+Stan wiedzy:
+- **Poziom per sub — potwierdzone.** `CVSW`/`CVSW2`, `PSSWL`/`PSSWL2`.
+- **Opóźnienie per sub — potwierdzone.** `SSSDESW 427`/`SSSDESW2 886`. Kluczowe
+  dla zgrania tuby (duże opóźnienie grupowe) z bas-refleksem.
+- **Niezależny filtr EQ per sub — wysoce prawdopodobne, NIEzweryfikowane.**
+  Za: (1) Sub EQ HT z definicji koryguje każdy sub osobno, więc sprzęt ma
+  osobne tory DSP; (2) `GET_AVRSTS` pokazuje `SWMIX1` i `SWMIX2` jako osobne
+  kanały; (3) `SET_COEFDT` wgrywa współczynniki per kanał.
+  Do rozstrzygnięcia: czy bieżący tryb subwoofera nie sumuje sygnału do mono
+  PRZED stopniem EQ. Test: zmierzyć każdy sub osobno i sprawdzić, czy filtr
+  wgrany na `SWMIX2` zmienia tylko BR, czy oba suby.
+
+### Tor wgrywania korekcji (SET_COEFDT)
+
+Szkielet do przygotowania: zmierz → policz korekcję z własnym targetem
+i cut-only → wgraj przez `ENTER_AUDY → INIT_COEFS → SET_COEFDT → FINZ_COEFS
+→ SET_SETDAT → SET_AUDYFINFLG → EXIT_AUDMD` → porównaj pomiarem różnicowym
+ON/OFF z wbudowanym Audyssey. Ryzyko: `ENTER_AUDY` nadpisuje bieżącą
+kalibrację — jest kopia w `kopie-nastaw/`.
+
+
 Trzy piloty wysyłają komunikaty bez błędu i utrzymują połączenie, ale
 **skutku wizualnego nie potwierdzono** — testy szły ze stacjonarnego
 w innym pokoju niż ekrany.
